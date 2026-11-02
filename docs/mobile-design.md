@@ -188,3 +188,37 @@ project or a passing local linter is not a clean SonarQube result.
 - [Cloudflare self-hosted application protection](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
 - [Cloudflare application token validation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/)
 - [Radhouse source](https://github.com/Running-Digitally/radhouse)
+
+## Implemented connection candidate
+
+The next slice adds the Access encrypted browser-transfer flow, followed by native
+Radhouse password/TOTP login through the existing `/auth/login` contract. The
+application token and local session token are stored together in device-only
+secure storage. Passwords and TOTP values are not persisted. Local parsing binds
+issuer, audience and expiry; the Access gateway remains the signature/identity
+verification authority. This compatibility flow follows the public cloudflared
+transfer protocol and needs qualification on each supported platform.
+
+Dedicated native HTTPS bridges reject redirects and foreign destinations, disable
+HTTP caches/cookie jars and bound response accumulation. Only an authenticated
+login response can supply the local session cookie. Explicit same-origin Origin
+and CSRF headers preserve server authorization. An authenticated restore checks
+`/auth/session` before displaying owner data and installs host-scoped, Secure,
+HttpOnly viewer cookies. Logout invalidates asynchronous work and clears secure
+storage and viewer data even when server revocation cannot be confirmed offline.
+
+Connected screens now read transcript and Library data, send messages with one
+frozen request UUID across explicit retries, and mount the existing Browser and
+Terminal viewers only when authenticated, foregrounded and server-capable.
+Library download/upload and native attachment/context selection remain pending.
+The UI conceals private content while inactive; iOS also covers the native window
+for task snapshots and Android disables recents capture (older Android versions
+use FLAG_SECURE). Re-entry validates the session before remounting viewers.
+
+Synthetic transport and UI tests cover the connection flow, stale login/logout
+races, malformed replies, denied capabilities, foreground revalidation and
+uncertain submission. Successful native builds do not establish live login,
+viewer streaming or real-device push acceptance. Record those separately.
+
+References: [cloudflared transfer source](https://github.com/cloudflare/cloudflared/blob/master/token/transfer.go),
+[React Native security](https://reactnative.dev/docs/security).

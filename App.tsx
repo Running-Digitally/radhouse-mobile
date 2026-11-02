@@ -8,6 +8,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Connected } from './src/screens/Connected';
+import { nativeSession } from './src/auth/native';
 import { Action } from './src/components/Action';
 import { Chat } from './src/screens/Chat';
 import { Library } from './src/screens/Library';
@@ -24,6 +26,7 @@ const symbols: Record<Destination, string> = {
   Settings: '☷',
 };
 function Workspace() {
+  const [connected, setConnected] = useState(false);
   const [turns, setTurns] = useState<readonly Turn[]>(sampleTurns);
   const [preview, setPreview] = useState(false);
   const [destination, setDestination] = useState<Destination>('Chat');
@@ -59,7 +62,14 @@ function Workspace() {
         <Text style={appStyles.brand}>radhouse</Text>
         <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>
       </View>
-      {preview ? (
+      {connected ? (
+        <KeyboardAvoidingView
+          style={styles.grow}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Connected client={nativeSession} leave={() => setConnected(false)} />
+        </KeyboardAvoidingView>
+      ) : preview ? (
         <>
           <View style={appStyles.preview}>
             <Text style={styles.small}>Development preview · sample data</Text>
@@ -129,12 +139,15 @@ function Workspace() {
             Your conversation, files and workspace, together wherever you are.
           </Text>
           <Action
+            title="Connect to my Radhouse"
+            onPress={() => setConnected(true)}
+          />
+          <Action
             title="Explore the app preview"
             onPress={() => setPreview(true)}
           />
           <Text style={styles.small}>
-            Development preview with sample data. No account credentials are
-            collected.
+            Connect to your account, or explore with sample data.
           </Text>
         </View>
       )}

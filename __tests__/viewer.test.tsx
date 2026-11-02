@@ -36,10 +36,12 @@ test('viewer requires an authenticated foreground session', () => {
   const tree = ui.toJSON() as unknown as {
     props: {
       source: { uri: string };
+      originWhitelist: string[];
       onShouldStartLoadWithRequest: (request: { url: string }) => boolean;
     };
   };
   expect(tree.props.source.uri).toBe(origin + '/browser');
+  expect(tree.props.originWhitelist).toEqual(['*']);
   expect(
     tree.props.onShouldStartLoadWithRequest({
       url: origin + '/chat/browser/stream/',

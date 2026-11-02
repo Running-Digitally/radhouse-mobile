@@ -80,3 +80,8 @@ Store the owner-created Project Analysis Token in macOS Keychain as service
 `homelab/sonarqube/radhouse-mobile`, account `radhouse-mobile-analysis`.
 Do not put the value in chat, Git, shell arguments, or a PR. Project registration
 is complete; token provisioning and the first processed main scan remain pending.
+
+The live-session candidate touches new authentication and viewer code. There is
+still no processed mobile Sonar baseline to inspect; no finding has been
+suppressed or claimed closed. The native bridge requires explicit platform
+review and device qualification in addition to Jest coverage.

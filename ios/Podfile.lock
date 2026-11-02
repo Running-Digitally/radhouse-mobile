@@ -1883,6 +1883,28 @@ PODS:
     - ReactNativeDependencies
     - RNFBApp
     - Yoga
+  - RNKeychain (10.0.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -1963,6 +1985,7 @@ DEPENDENCIES:
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
   - "RNFBMessaging (from `../node_modules/@react-native-firebase/messaging`)"
+  - RNKeychain (from `../node_modules/react-native-keychain`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 EXTERNAL SOURCES:
@@ -2119,6 +2142,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-firebase/app"
   RNFBMessaging:
     :path: "../node_modules/@react-native-firebase/messaging"
+  RNKeychain:
+    :path: "../node_modules/react-native-keychain"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -2199,6 +2224,7 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: 716b6b35f06d8080a1288e0bc356b92b7322f7c3
   RNFBApp: f46393fbe79b9f81de9c857b039a29d1056fdb72
   RNFBMessaging: 66d90c80a2a540806f4131ea5c352fa1e9f1db25
+  RNKeychain: d57edf101a72acf3ae85fe4d796eed1d951d2a90
   Yoga: 7bc3d5ffbb9f3b12001659657d7a56483fcb1e3a
 
 PODFILE CHECKSUM: 762adef542d951e4a5ad4dc0b6e6ea965088c824

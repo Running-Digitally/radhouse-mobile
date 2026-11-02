@@ -13,6 +13,8 @@
 		8D536229D5C84B326FF88E74 /* Pods_RadhouseMobile.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B2244E9102A91145366D4463 /* Pods_RadhouseMobile.framework */; };
 		94BFAD61225A03A1D874F089 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		D569091B59A63CAC5A6B4CB1 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3019EA1F0ABD713E0749943D /* FirebaseCore */; };
+		F7B0000000000000000000A1 /* RadhouseHTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D0000000000000000000A1 /* RadhouseHTTP.swift */; };
+		F7B0000000000000000000A2 /* RadhouseHTTPBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = F7D0000000000000000000A2 /* RadhouseHTTPBridge.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +28,8 @@
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = RadhouseMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		B2244E9102A91145366D4463 /* Pods_RadhouseMobile.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RadhouseMobile.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F7D0000000000000000000A1 /* RadhouseHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RadhouseHTTP.swift; path = RadhouseMobile/RadhouseHTTP.swift; sourceTree = "<group>"; };
+		F7D0000000000000000000A2 /* RadhouseHTTPBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; name = RadhouseHTTPBridge.mm; path = RadhouseMobile/RadhouseHTTPBridge.mm; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,6 +49,8 @@
 			isa = PBXGroup;
 			children = (
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
+				F7D0000000000000000000A1 /* RadhouseHTTP.swift */,
+				F7D0000000000000000000A2 /* RadhouseHTTPBridge.mm */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
@@ -308,10 +314,13 @@
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
-			files = ();
-			inputPaths = ();
+			files = (
+			);
+			inputPaths = (
+			);
 			name = "Optional Firebase client config";
-			outputPaths = ();
+			outputPaths = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "bash \"$SRCROOT/../scripts/copy-firebase-config.sh\"";
@@ -323,6 +332,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F7B0000000000000000000A1 /* RadhouseHTTP.swift in Sources */,
+				F7B0000000000000000000A2 /* RadhouseHTTPBridge.mm in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -334,13 +345,13 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 3B4392A12AC88292D35C810B /* Pods-RadhouseMobile.debug.xcconfig */;
 			buildSettings = {
+				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_EXPLICIT_MODULES = NO;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = RadhouseMobile/RadhouseMobile.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
-				CODE_SIGN_ENTITLEMENTS = RadhouseMobile/RadhouseMobile.entitlements;
-				APS_ENVIRONMENT = development;
 				INFOPLIST_FILE = RadhouseMobile/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -369,12 +380,12 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5709B34CF0A7D63546082F79 /* Pods-RadhouseMobile.release.xcconfig */;
 			buildSettings = {
+				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_EXPLICIT_MODULES = NO;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
 				CODE_SIGN_ENTITLEMENTS = RadhouseMobile/RadhouseMobile.entitlements;
-				APS_ENVIRONMENT = production;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = RadhouseMobile/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (

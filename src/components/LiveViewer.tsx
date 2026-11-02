@@ -19,7 +19,9 @@ export function LiveViewer({
   return (
     <WebView
       source={{ uri: viewerURL(origin, destination) }}
-      originWhitelist={[origin]}
+      // WebView opens non-whitelisted origins externally before consulting the
+      // callback. Route every URL through our rejecting policy instead.
+      originWhitelist={['*']}
       onShouldStartLoadWithRequest={request =>
         viewerNavigationAllowed(request.url, origin)
       }

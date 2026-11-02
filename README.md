@@ -4,10 +4,15 @@ Native iPhone and Android companion for Radhouse, built with React Native and
 TypeScript. The first executable slice is an explicitly labelled development
 preview with native Chat, Library, Browser, Terminal and Settings screens.
 
-The preview uses synthetic data. Live sign-in, conversation continuity, streaming
-browser, terminal input and remote push delivery are still in development. The
-restricted WebView component and Firebase messaging adapter have boundary tests;
-they are not yet connected to an authenticated backend session.
+The preview uses synthetic data. A separate **Connect to my Radhouse** flow now
+implements two-layer sign-in, secure session restoration, native conversation
+and Library reads, explicit message submission, and authenticated Browser and
+Terminal viewers. This connection candidate requires live owner qualification;
+Library downloads/uploads and remote push delivery remain in development.
+
+The Firebase messaging adapter has boundary tests but is not yet connected to a
+backend registration/outbox service. Do not treat the sample notification button
+or a successful native build as evidence of APNs/FCM delivery.
 
 ## Develop
 

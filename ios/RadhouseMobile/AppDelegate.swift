@@ -20,8 +20,27 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 // UIKit owns the window through its scene lifecycle, including on iOS 27.
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   var window: UIWindow?
+  private var privacyCover: UIView?
   private var reactNativeDelegate: ReactNativeDelegate?
   private var reactNativeFactory: RCTReactNativeFactory?
+
+  func sceneWillResignActive(_ scene: UIScene) {
+    guard let window else { return }
+    let cover = UIView(frame: window.bounds)
+    cover.backgroundColor = UIColor.systemBackground
+    cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    privacyCover?.removeFromSuperview()
+    window.addSubview(cover)
+    privacyCover = cover
+    // React Native 0.85 observes the application lifecycle notifications.
+    NotificationCenter.default.post(name: UIApplication.willResignActiveNotification, object: UIApplication.shared)
+  }
+
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: UIApplication.shared)
+    privacyCover?.removeFromSuperview()
+    privacyCover = nil
+  }
 
   func scene(
     _ scene: UIScene,

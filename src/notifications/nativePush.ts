@@ -1,6 +1,8 @@
 import { getApps } from '@react-native-firebase/app';
 import {
   unregister,
+  getAPNSToken,
+  unregisterDeviceForRemoteMessages,
   registerDeviceForRemoteMessages,
   getInitialNotification,
   getMessaging,
@@ -48,13 +50,13 @@ export class NativePush {
       return 'denied';
     }
     this.registration = registration;
-    if (Platform.OS === 'ios') {
-      await registerDeviceForRemoteMessages(messaging);
-    }
-    if (epoch !== this.epoch) {
-      return 'denied';
-    }
     try {
+      if (Platform.OS === 'ios') {
+        await this.prepareAPNs(messaging, epoch);
+      }
+      if (epoch !== this.epoch) {
+        return 'denied';
+      }
       const ready = await this.registerInstallation(
         messaging,
         epoch,
@@ -67,6 +69,29 @@ export class NativePush {
         await this.disable().catch(() => undefined);
       }
       throw error;
+    }
+  }
+
+  private async prepareAPNs(
+    messaging: ReturnType<typeof getMessaging>,
+    epoch: number,
+  ): Promise<void> {
+    await registerDeviceForRemoteMessages(messaging);
+    if (epoch !== this.epoch || (await getAPNSToken(messaging))) {
+      return;
+    }
+    // iOS can retain its registered flag while Firebase has no token in this launch.
+    // The SDK then returns early without asking APNs for a fresh callback.
+    if (epoch !== this.epoch) {
+      return;
+    }
+    await unregisterDeviceForRemoteMessages(messaging);
+    if (epoch !== this.epoch) {
+      return;
+    }
+    await registerDeviceForRemoteMessages(messaging);
+    if (epoch === this.epoch && !(await getAPNSToken(messaging))) {
+      throw new Error('Apple notification registration is not ready. Please retry.');
     }
   }
 

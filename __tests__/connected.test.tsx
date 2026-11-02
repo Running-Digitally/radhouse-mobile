@@ -396,7 +396,7 @@ test('sending from a notification returns to the current conversation', async ()
   };
   const f = await fixture(info, notifications as unknown as NotificationConnection);
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
-  act(() => callbacks.open(turn.request_id));
+  await act(async () => callbacks.open(turn.request_id));
   await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
   expect(f.ui.getByText('Back to current conversation')).toBeTruthy();
   fireEvent.changeText(

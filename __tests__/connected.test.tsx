@@ -3,7 +3,7 @@ import { AppState, ScrollView } from 'react-native';
 import {
   act,
   fireEvent,
-  render,
+  renderAsync,
   waitFor,
   within,
 } from '@testing-library/react-native';
@@ -22,7 +22,7 @@ const turn = {
   output: 'Synthetic reply',
   status: 'completed',
 };
-function fixture(
+async function fixture(
   restore: typeof info | null = null,
   notifications?: NotificationConnection,
 ) {
@@ -48,7 +48,7 @@ function fixture(
     ),
   };
   const leave = jest.fn();
-  const ui = render(
+  const ui = await renderAsync(
     <Connected
       client={client as unknown as SessionClient}
       leave={leave}
@@ -74,7 +74,7 @@ test('notification controls preserve consent, verify a tapped target, and revoke
     disable: jest.fn(async () => callbacks.state('off')),
     disconnect: jest.fn(),
   };
-  const f = fixture(info, notifications as unknown as NotificationConnection);
+  const f = await fixture(info, notifications as unknown as NotificationConnection);
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   fireEvent.press(f.ui.getByText('Settings'));
   fireEvent.press(f.ui.getByText('Enable reply notifications'));
@@ -110,7 +110,7 @@ test('notification controls preserve consent, verify a tapped target, and revoke
   expect(f.client.logout).toHaveBeenCalledTimes(1);
 });
 test('complete two-layer sign-in, native reads, viewer selection and logout', async () => {
-  const f = fixture();
+  const f = await fixture();
   await waitFor(() =>
     expect(f.ui.getByText('Sign in with Access')).toBeTruthy(),
   );
@@ -159,7 +159,7 @@ test('complete two-layer sign-in, native reads, viewer selection and logout', as
 test.each(['unavailable', 'conflict'] as const)(
   'Send failure (%s) retains frozen text and the same request ID on explicit retry',
   async kind => {
-    const f = fixture(info);
+    const f = await fixture(info);
     await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
     f.client.send.mockRejectedValueOnce(new SessionError(kind));
     fireEvent.changeText(
@@ -190,7 +190,7 @@ test.each(['unavailable', 'conflict'] as const)(
   },
 );
 test('cancelled browser login cannot reopen the workspace', async () => {
-  const f = fixture();
+  const f = await fixture();
   await waitFor(() =>
     expect(f.ui.getByText('Sign in with Access')).toBeTruthy(),
   );
@@ -208,7 +208,7 @@ test('cancelled browser login cannot reopen the workspace', async () => {
   expect(f.ui.queryByText('Welcome back.')).toBeNull();
 });
 test('expiry discards private content and asks for authentication again', async () => {
-  const f = fixture(info);
+  const f = await fixture(info);
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   f.client.read.mockRejectedValueOnce(new SessionError('expired'));
   fireEvent.press(f.ui.getByText('Refresh conversation'));
@@ -226,18 +226,18 @@ test('background hides data and viewers, foreground revalidates before showing t
       changed = listener;
       return { remove: jest.fn() };
     });
-  const f = fixture(info);
+  const f = await fixture(info);
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   act(() => changed('background'));
   expect(f.ui.queryByText('Synthetic reply')).toBeNull();
   act(() => changed('active'));
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   expect(f.client.read).toHaveBeenCalledWith('/auth/session');
-  f.ui.unmount();
+  await f.ui.unmountAsync();
   spy.mockRestore();
 });
 test('login rejection clears the entered password and provides an actionable error', async () => {
-  const f = fixture();
+  const f = await fixture();
   await waitFor(() =>
     expect(f.ui.getByText('Sign in with Access')).toBeTruthy(),
   );
@@ -256,7 +256,7 @@ test('login rejection clears the entered password and provides an actionable err
   expect(f.ui.getByLabelText('Radhouse password').props.value).toBe('');
 });
 test('server capabilities prevent unavailable viewers and failed logout remains honest', async () => {
-  const f = fixture({
+  const f = await fixture({
     ...info,
     features: { browser_streaming: false, terminal: false },
   });
@@ -284,7 +284,7 @@ test('malformed history never renders unchecked content', () => {
 
 test('background polling keeps the composer editable and does not block Send or overwrite a newer reply', async () => {
   jest.useFakeTimers();
-  const f = fixture(info);
+  const f = await fixture(info);
   await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   let finishPoll!: () => void;
@@ -327,7 +327,7 @@ test('history opens at the bottom, preserves reading position, and keeps the com
     .spyOn(ScrollView.prototype, 'scrollToEnd')
     .mockImplementation(() => undefined);
   try {
-    const f = fixture(info);
+    const f = await fixture(info);
     await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
     const history = f.ui.getByTestId('conversation-history');
     expect(within(history).queryByLabelText('Message Radhouse')).toBeNull();
@@ -375,7 +375,7 @@ test('logout invalidates the session immediately while notification cleanup is p
         }),
     ),
   };
-  const f = fixture(info, notifications as unknown as NotificationConnection);
+  const f = await fixture(info, notifications as unknown as NotificationConnection);
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   fireEvent.press(f.ui.getByText('Settings'));
   fireEvent.press(f.ui.getByText('Sign out'));
@@ -394,7 +394,7 @@ test('sending from a notification returns to the current conversation', async ()
     }),
     disconnect: jest.fn(),
   };
-  const f = fixture(info, notifications as unknown as NotificationConnection);
+  const f = await fixture(info, notifications as unknown as NotificationConnection);
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   act(() => callbacks.open(turn.request_id));
   await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());

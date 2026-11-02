@@ -26,7 +26,7 @@ class RadhouseHTTP: NSObject {
                reject: @escaping RCTPromiseRejectBlock) {
     guard let url = URL(string: raw), url.scheme == "https", url.user == nil,
           url.password == nil, url.port == nil, url.fragment == nil,
-          ["GET", "POST"].contains(method), body.utf8.count <= 262144,
+          ["GET", "POST", "PUT", "DELETE"].contains(method), body.utf8.count <= 262144,
           access.utf8.count <= 16384, local.utf8.count <= 200, csrf.utf8.count <= 200,
           ![access, local, csrf].contains(where: { $0.contains("\r") || $0.contains("\n") || $0.contains(";") }),
           url.host == appHost || (url.host == "login.cloudflareaccess.org" &&
@@ -43,7 +43,7 @@ class RadhouseHTTP: NSObject {
       if !local.isEmpty { request.setValue("radhouse_session=\(local)", forHTTPHeaderField: "Cookie") }
       if !csrf.isEmpty { request.setValue(csrf, forHTTPHeaderField: "x-radhouse-csrf") }
     }
-    if method == "POST" {
+    if method != "GET" {
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.httpBody = body.data(using: .utf8)
     }

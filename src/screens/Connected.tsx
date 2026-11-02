@@ -1,19 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AppState,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { AppState, ScrollView, Text, TextInput, View } from 'react-native';
 import { SessionClient } from '../auth/client';
 import { SessionError, SessionInfo } from '../auth/types';
+import {
+  NotificationConnection,
+  NotificationState,
+} from '../notifications/connection';
 import { ORIGIN, object } from '../auth/transfer';
+import { TabBar } from '../components/TabBar';
 import { LiveViewer } from '../components/LiveViewer';
 import { Action } from '../components/Action';
 import { styles } from '../theme';
-import { Destination, destinations } from '../workspace';
+import { Destination } from '../workspace';
 
 type LiveTurn = {
   request_id: string;
@@ -73,7 +71,12 @@ function failure(error: unknown): string {
 export function Connected({
   client,
   leave,
-}: Readonly<{ client: SessionClient; leave: () => void }>) {
+  notifications,
+}: Readonly<{
+  client: SessionClient;
+  leave: () => void;
+  notifications?: NotificationConnection;
+}>) {
   const [step, setStep] = useState<
     'restore' | 'access' | 'local' | 'workspace'
   >('restore');
@@ -91,6 +94,12 @@ export function Connected({
   const [error, setError] = useState('');
   const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [notificationState, setNotificationState] =
+    useState<NotificationState>('unavailable');
+  const [notificationRequest, setNotificationRequest] = useState<string | null>(
+    null,
+  );
+  const [replyReady, setReplyReady] = useState(false);
   const [active, setActive] = useState(AppState.currentState === 'active');
   const busyRef = useRef(false);
   const generation = useRef(0);
@@ -115,8 +124,11 @@ export function Connected({
             setTurns([]);
             setFiles([]);
             setPending(null);
+            setNotificationRequest(null);
+            setReplyReady(false);
             setText('');
             setStep('access');
+            await notifications?.disable().catch(() => undefined);
             await client.logout().catch(() => undefined);
           }
         }
@@ -127,7 +139,7 @@ export function Connected({
         }
       }
     },
-    [client],
+    [client, notifications],
   );
   const restore = useCallback(
     async (epoch: number) => {
@@ -161,10 +173,50 @@ export function Connected({
     };
   }, [run, restore, invalidate]);
 
+  useEffect(() => {
+    if (step !== 'workspace' || !info?.username || !notifications) {
+      return;
+    }
+    let attached = true;
+    notifications
+      .connect(info.username, {
+        state: value => {
+          if (attached) {
+            setNotificationState(value);
+          }
+        },
+        foreground: () => {
+          if (attached) {
+            setReplyReady(true);
+          }
+        },
+        open: id => {
+          if (!attached) {
+            return;
+          }
+          setNotificationRequest(id);
+          setDestination('Chat');
+        },
+      })
+      .catch(() => {
+        if (attached) {
+          setNotificationState('error');
+        }
+      });
+    return () => {
+      attached = false;
+      notifications.disconnect();
+    };
+  }, [step, info?.username, notifications]);
+
   const refresh = useCallback(async () => {
     const epoch = generation.current;
     const result = await client.read(
-      destination === 'Library' ? '/chat/library' : '/chat/reply',
+      destination === 'Library'
+        ? '/chat/library'
+        : notificationRequest
+        ? '/chat/messages/' + notificationRequest
+        : '/chat/reply',
     );
     if (epoch !== generation.current) {
       return;
@@ -172,9 +224,9 @@ export function Connected({
     if (destination === 'Library') {
       setFiles(readFiles(result.files));
     } else {
-      setTurns(readTurns(result.turns));
+      setTurns(readTurns(notificationRequest ? [result.turn] : result.turns));
     }
-  }, [client, destination]);
+  }, [client, destination, notificationRequest]);
   const revalidate = useCallback(async () => {
     const epoch = generation.current;
     const result = await client.read('/auth/session');
@@ -213,10 +265,14 @@ export function Connected({
     setFiles([]);
     setText('');
     setPending(null);
+    setNotificationRequest(null);
+    setReplyReady(false);
     setPassword('');
     setCode('');
     setStep('access');
     try {
+      // Server session revocation remains authoritative if device cleanup fails.
+      await notifications?.disable().catch(() => undefined);
       await client.logout();
       leave();
     } catch {
@@ -291,7 +347,11 @@ export function Connected({
   }
   return (
     <View style={styles.grow}>
-      <View style={styles.page}>
+      <View
+        style={
+          step === 'workspace' && !error && !busy ? undefined : styles.page
+        }
+      >
         {error ? (
           <Text accessibilityRole="alert" style={styles.body}>
             {error}
@@ -365,19 +425,6 @@ export function Connected({
         {step !== 'workspace' && (
           <Action title="Cancel sign-in" secondary onPress={signOut} />
         )}
-        {step === 'workspace' && (
-          <View style={connectedStyles.destinations}>
-            {destinations.map(item => (
-              <Action
-                key={item}
-                title={item}
-                secondary={destination !== item}
-                disabled={busy}
-                onPress={() => setDestination(item)}
-              />
-            ))}
-          </View>
-        )}
       </View>
       {step === 'workspace' &&
         (destination === 'Browser' || destination === 'Terminal') &&
@@ -401,6 +448,19 @@ export function Connected({
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.title}>Your conversation.</Text>
+          {replyReady && (
+            <Text style={styles.small}>A Radhouse reply is ready.</Text>
+          )}
+          {notificationRequest && (
+            <Action
+              title="Back to current conversation"
+              secondary
+              onPress={() => {
+                setNotificationRequest(null);
+                setReplyReady(false);
+              }}
+            />
+          )}
           {turns.map(turn => (
             <View key={turn.request_id} style={styles.card}>
               <Text style={styles.eyebrow}>YOU</Text>
@@ -466,16 +526,50 @@ export function Connected({
           <Text style={styles.title}>Your connection.</Text>
           <Text style={styles.body}>Signed in as {info?.username}</Text>
           <Text style={styles.subtitle}>
-            Push notifications need the server delivery service and APNs setup
-            before they can be enabled.
+            {notificationState === 'on'
+              ? 'Reply notifications are enabled on this device.'
+              : notificationState === 'unavailable'
+              ? 'Reply notifications are not available on this connection yet.'
+              : notificationState === 'error'
+              ? 'Notification setup could not be confirmed. Retry when connected.'
+              : 'Get a private notification when your reply is ready.'}
           </Text>
+          {notifications && notificationState !== 'unavailable' && (
+            <Action
+              title={
+                notificationState === 'on'
+                  ? 'Turn off reply notifications'
+                  : 'Enable reply notifications'
+              }
+              disabled={notificationState === 'loading'}
+              onPress={() => {
+                const action =
+                  notificationState === 'on'
+                    ? notifications.disable()
+                    : notifications.enable();
+                action.catch(() => setNotificationState('error'));
+              }}
+            />
+          )}
+          {notifications && notificationState === 'error' && (
+            <Action
+              title="Turn off reply notifications"
+              secondary
+              onPress={() => {
+                notifications.disable().catch(() => setNotificationState('error'));
+              }}
+            />
+          )}
           <Action title="Sign out" secondary onPress={signOut} />
         </ScrollView>
+      )}
+      {step === 'workspace' && (
+        <TabBar
+          destination={destination}
+          select={setDestination}
+          disabled={busy}
+        />
       )}
     </View>
   );
 }
-
-const connectedStyles = StyleSheet.create({
-  destinations: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-});

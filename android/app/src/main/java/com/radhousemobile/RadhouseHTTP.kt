@@ -36,7 +36,7 @@ class RadhouseHTTP(context: ReactApplicationContext) : ReactContextBaseJavaModul
     val relay = url?.host == "login.cloudflareaccess.org" && url.encodedPath.startsWith("/transfer/") &&
       url.query == null && method == "GET" && access.isEmpty() && local.isEmpty() && csrf.isEmpty() && body.isEmpty()
     if (url == null || !url.isHttps || url.port != 443 || url.username.isNotEmpty() ||
-      url.password.isNotEmpty() || url.fragment != null || !(app || relay) || method !in listOf("GET","POST") ||
+      url.password.isNotEmpty() || url.fragment != null || !(app || relay) || method !in listOf("GET","POST","PUT","DELETE") ||
       !safe(access,16384) || !safe(local,200) || !safe(csrf,200) || body.toByteArray().size > 262144) {
       promise.reject("denied","Request not allowed"); return
     }
@@ -46,7 +46,7 @@ class RadhouseHTTP(context: ReactApplicationContext) : ReactContextBaseJavaModul
       if (local.isNotEmpty()) request.header("Cookie","radhouse_session=$local")
       if (csrf.isNotEmpty()) request.header("x-radhouse-csrf",csrf)
     }
-    if (method == "POST") request.post(body.toRequestBody("application/json".toMediaType()))
+    if (method != "GET") request.method(method, body.toRequestBody("application/json".toMediaType()))
     client.newCall(request.build()).enqueue(object: okhttp3.Callback {
       override fun onFailure(call: Call, e: IOException) { promise.reject("network_failed","Could not complete secure request") }
       override fun onResponse(call: Call, response: Response) {

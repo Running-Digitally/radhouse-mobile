@@ -8,6 +8,7 @@ import {
   tokenExpiry,
 } from './transfer';
 import { Credentials, SessionError, SessionInfo, SessionIO } from './types';
+import type { PushRegistration } from '../notifications/nativePush';
 
 const localToken = /^[A-Za-z0-9_-]{40,200}$/;
 /** One owner session. Credentials never belong to React screen state. */
@@ -90,6 +91,9 @@ export class SessionClient {
     }
     if (result.status === 409) {
       throw new SessionError('conflict');
+    }
+    if (result.status === 404 && path.startsWith('/chat/push/')) {
+      throw new SessionError('unsupported');
     }
     if (result.status < 200 || result.status >= 300) {
       throw new SessionError('unavailable');
@@ -328,5 +332,63 @@ export class SessionClient {
       12,
       16,
     )}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  async pushAvailable(): Promise<boolean> {
+    if (!this.credentials.local) {
+      throw new SessionError('expired');
+    }
+    try {
+      const { data } = await this.json('/chat/push/status', this.credentials);
+      return data.available === true;
+    } catch (error) {
+      if (error instanceof SessionError && error.kind === 'unsupported') {
+        return false;
+      }
+      throw error;
+    }
+  }
+  pushRegistration(installation: string): PushRegistration {
+    if (
+      !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
+        installation,
+      )
+    ) {
+      throw new SessionError('invalid');
+    }
+    const epoch = this.epoch;
+    const path = '/chat/push/devices/' + installation;
+    const credentials = { ...this.credentials };
+    const csrf = this.csrf;
+    const change = async (method: string, body?: object) => {
+      this.current(epoch);
+      if (!this.credentials.local || !this.csrf) {
+        throw new SessionError('expired');
+      }
+      await this.json(path, this.credentials, method, body);
+    };
+    return {
+      register: async (token, platform) => {
+        if (!/^[A-Za-z0-9_:.-]{20,4096}$/.test(token)) {
+          throw new SessionError('invalid');
+        }
+        await change('PUT', { token, platform });
+      },
+      unregister: async () => {
+        // Cleanup stays bound to the original session even after a new login.
+        // The server also matches the stored session hash before deleting.
+        const response = await this.io.request(
+          ORIGIN + path,
+          'DELETE',
+          credentials.access,
+          credentials.local,
+          csrf,
+          '',
+        );
+        if (response.status !== 200 && response.status !== 401) {
+          throw new SessionError('unavailable');
+        }
+      },
+    };
   }
 }

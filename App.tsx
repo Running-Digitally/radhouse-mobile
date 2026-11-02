@@ -8,7 +8,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { TabBar } from './src/components/TabBar';
 import { Connected } from './src/screens/Connected';
+import { createMobileNotifications } from './src/notifications/nativeConnection';
+import { NotificationConnection } from './src/notifications/connection';
 import { nativeSession } from './src/auth/native';
 import { Action } from './src/components/Action';
 import { Chat } from './src/screens/Chat';
@@ -16,17 +19,11 @@ import { Library } from './src/screens/Library';
 import { Browser } from './src/screens/Browser';
 import { Terminal } from './src/screens/Terminal';
 import { Settings } from './src/screens/Settings';
-import { Destination, destinations, sampleTurns, Turn } from './src/workspace';
+import { Destination, sampleTurns, Turn } from './src/workspace';
 import { colors, styles } from './src/theme';
-const symbols: Record<Destination, string> = {
-  Chat: '◌',
-  Library: '▤',
-  Browser: '◎',
-  Terminal: '>_',
-  Settings: '☷',
-};
 function Workspace() {
   const [connected, setConnected] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationConnection>();
   const [turns, setTurns] = useState<readonly Turn[]>(sampleTurns);
   const [preview, setPreview] = useState(false);
   const [destination, setDestination] = useState<Destination>('Chat');
@@ -58,16 +55,23 @@ function Workspace() {
   }
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={appStyles.header}>
+      <View style={[appStyles.header, connected && appStyles.compactHeader]}>
         <Text style={appStyles.brand}>radhouse</Text>
-        <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>
+        {!connected && <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>}
       </View>
       {connected ? (
         <KeyboardAvoidingView
           style={styles.grow}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <Connected client={nativeSession} leave={() => setConnected(false)} />
+          <Connected
+            client={nativeSession}
+            notifications={notifications}
+            leave={() => {
+              setConnected(false);
+              setNotifications(undefined);
+            }}
+          />
         </KeyboardAvoidingView>
       ) : preview ? (
         <>
@@ -96,35 +100,7 @@ function Workspace() {
           >
             {screen()}
           </KeyboardAvoidingView>
-          <View style={appStyles.tabs} accessibilityRole="tablist">
-            {destinations.map(item => (
-              <Pressable
-                key={item}
-                accessibilityRole="tab"
-                accessibilityLabel={item}
-                accessibilityState={{ selected: destination === item }}
-                onPress={() => setDestination(item)}
-                style={appStyles.tab}
-              >
-                <Text
-                  style={[
-                    appStyles.tabSymbol,
-                    destination === item && appStyles.selected,
-                  ]}
-                >
-                  {symbols[item]}
-                </Text>
-                <Text
-                  style={[
-                    appStyles.tabLabel,
-                    destination === item && appStyles.selected,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <TabBar destination={destination} select={setDestination} />
         </>
       ) : (
         <View style={[styles.page, appStyles.welcome]}>
@@ -140,7 +116,10 @@ function Workspace() {
           </Text>
           <Action
             title="Connect to my Radhouse"
-            onPress={() => setConnected(true)}
+            onPress={() => {
+              setNotifications(createMobileNotifications());
+              setConnected(true);
+            }}
           />
           <Action
             title="Explore the app preview"
@@ -163,6 +142,7 @@ export default function App() {
 }
 const appStyles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingVertical: 18, gap: 6 },
+  compactHeader: { paddingVertical: 8 },
   brand: {
     fontSize: 27,
     fontWeight: '700',
@@ -197,15 +177,4 @@ const appStyles = StyleSheet.create({
     backgroundColor: colors.accent,
     gap: 4,
   },
-  tabs: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: colors.line,
-    paddingTop: 10,
-    backgroundColor: colors.paper,
-  },
-  tab: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 8 },
-  tabSymbol: { fontSize: 22, height: 28, color: colors.muted },
-  tabLabel: { fontSize: 10, fontWeight: '500', color: colors.muted },
-  selected: { color: colors.ink, fontWeight: '700' },
 });

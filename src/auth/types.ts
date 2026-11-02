@@ -6,6 +6,7 @@ export class SessionError extends Error {
       | 'unavailable'
       | 'invalid'
       | 'pending'
+      | 'unsupported'
       | 'credentials'
       | 'conflict',
   ) {

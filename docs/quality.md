@@ -85,3 +85,14 @@ The live-session candidate touches new authentication and viewer code. There is
 still no processed mobile Sonar baseline to inspect; no finding has been
 suppressed or claimed closed. The native bridge requires explicit platform
 review and device qualification in addition to Jest coverage.
+
+The authenticated push candidate passes 70 Jest tests, 15 scanner-tooling tests,
+TypeScript and lint. Coverage is 94.78% lines, 90.12% branches and 88.27% functions.
+Both iOS Release simulator and Android debug builds pass. No merged-main mobile
+scan has processed, so these checks do not establish SonarQube closure.
+
+The production dependency audit currently reports 24 affected package entries
+(6 high, 15 moderate, 3 low), including transitive Firebase JavaScript and build
+tool dependencies. Automatic remediation proposes incompatible major changes
+or a Firebase downgrade; it has not been applied. Dependency qualification is
+still open and must not be described as clean.

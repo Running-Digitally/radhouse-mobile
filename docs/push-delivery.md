@@ -1,7 +1,8 @@
 # Push delivery contract
 
-Status: mobile adapter implemented; backend integration and real-device delivery
-pending. Owner choice, 2 November 2026: reuse the existing Apple developer team
+Status: authenticated mobile integration and matching backend candidate
+implemented; deployment and real-device delivery pending. Owner choice,
+2 November 2026: reuse the existing Apple developer team
 and Firebase project, with separate Radhouse application registrations. Keep
 provider identifiers, credentials and deployment evidence in private operations
 records. App identifiers on both platforms are `com.runningdigitally.radhouse`.
@@ -23,14 +24,18 @@ request before opening Chat. A failed or forbidden read must not navigate or sen
 anything. Queue at most one pending target while signed out; discard prior-user
 work and duplicate events at the session boundary.
 
-## Proposed backend integration
+## Backend integration
 
-These routes are a design contract, not currently deployed API endpoints:
+These routes are implemented in the separate backend candidate, not yet deployed:
 
+- `GET /chat/push/status` reports availability only when push is configured.
+  A missing route is shown as unavailable; authentication errors are not hidden.
 - `PUT /chat/push/devices/{installation_id}` accepts the platform and FCM token.
   The server derives owner, conversation and session binding from authentication.
   Bound the request, validate identifiers, and reject caller-supplied identities.
-- `DELETE /chat/push/devices/{installation_id}` revokes only that owner's device.
+- `DELETE /chat/push/devices/{installation_id}` revokes only that owner's device
+  registered under the requesting session. Delayed cleanup from an old session
+  cannot delete a newer registration.
   Make deletion idempotent. Logout must also revoke the server session; do not
   depend solely on the handset reaching this route.
 - An outbox observes durable completed replies independently of client polling.
@@ -81,6 +86,17 @@ existing product's registration, signing or messaging settings to enable Radhous
 5. Complete the merged-main SonarQube scan/fix/rescan cycle. Unit tests and local
    notification previews cannot substitute for provider or device proof.
 
-The adapter currently provides `PushRegistration` callbacks for the future
-session-aware client. It intentionally has no embedded server token or arbitrary
-notification URL handler. Live integration remains necessary before release.
+The session client now supplies authenticated `PushRegistration` callbacks with
+CSRF protection and rejects registration after a session change. Opt-in is saved
+separately in device-only secure storage and restored only for the same username.
+Foreground notifications show a generic indicator; a tap rechecks request
+ownership before loading the corresponding turn. Sign-out attempts device
+unregistration and provider token deletion, then revokes the server session.
+Offline revocation cannot be guaranteed and must remain visible to the user.
+
+Local validation on 2 November: 70 Jest behavior tests and 15 scanner-tooling
+tests passed, as did TypeScript, lint, coverage gates, iOS Release simulator and
+Android debug builds. Permission denial, persistence, account changes, token
+rotation, cleanup failures and stale asynchronous operations have synthetic
+coverage. Signed-device delivery, cold-start/background behavior and live
+provider configuration remain release prerequisites.

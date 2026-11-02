@@ -4,6 +4,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Connected, readTurns } from '../src/screens/Connected';
 import { SessionClient } from '../src/auth/client';
 import { SessionError } from '../src/auth/types';
+import { NotificationConnection } from '../src/notifications/connection';
 jest.mock('react-native-webview', () => ({ WebView: 'WebView' }));
 const info = {
   username: 'synthetic-owner',
@@ -15,7 +16,10 @@ const turn = {
   output: 'Synthetic reply',
   status: 'completed',
 };
-function fixture(restore: typeof info | null = null) {
+function fixture(
+  restore: typeof info | null = null,
+  notifications?: NotificationConnection,
+) {
   const client = {
     restore: jest.fn(async () => restore),
     accessLogin: jest.fn(async () => undefined),
@@ -32,12 +36,18 @@ function fixture(restore: typeof info | null = null) {
               { id: 'file:synthetic', name: 'Sample note', kind: 'text' },
             ],
           }
+        : path.startsWith('/chat/messages/')
+        ? { turn }
         : { turns: [turn] },
     ),
   };
   const leave = jest.fn();
   const ui = render(
-    <Connected client={client as unknown as SessionClient} leave={leave} />,
+    <Connected
+      client={client as unknown as SessionClient}
+      leave={leave}
+      notifications={notifications}
+    />,
   );
   return { client, leave, ui };
 }
@@ -46,6 +56,50 @@ beforeEach(() => {
   jest
     .spyOn(AppState, 'addEventListener')
     .mockReturnValue({ remove: jest.fn() });
+});
+test('notification controls preserve consent, verify a tapped target, and revoke the session on logout', async () => {
+  let callbacks!: Parameters<NotificationConnection['connect']>[1];
+  const notifications = {
+    connect: jest.fn(async (_username: string, listener: typeof callbacks) => {
+      callbacks = listener;
+      listener.state('off');
+    }),
+    enable: jest.fn(async () => callbacks.state('on')),
+    disable: jest.fn(async () => callbacks.state('off')),
+    disconnect: jest.fn(),
+  };
+  const f = fixture(info, notifications as unknown as NotificationConnection);
+  await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
+  fireEvent.press(f.ui.getByText('Settings'));
+  fireEvent.press(f.ui.getByText('Enable reply notifications'));
+  await waitFor(() =>
+    expect(f.ui.getByText('Turn off reply notifications')).toBeTruthy(),
+  );
+  act(() => callbacks.foreground());
+  act(() => callbacks.open(turn.request_id));
+  await waitFor(() =>
+    expect(f.client.read).toHaveBeenCalledWith(
+      '/chat/messages/' + turn.request_id,
+    ),
+  );
+  expect(f.ui.getByText('A Radhouse reply is ready.')).toBeTruthy();
+  fireEvent.press(f.ui.getByText('Back to current conversation'));
+  await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
+  fireEvent.press(f.ui.getByText('Settings'));
+  notifications.disable.mockRejectedValueOnce(new Error('provider offline'));
+  fireEvent.press(f.ui.getByText('Turn off reply notifications'));
+  await waitFor(() =>
+    expect(f.ui.getByText(/Notification setup could not be confirmed/)).toBeTruthy(),
+  );
+  fireEvent.press(f.ui.getByText('Turn off reply notifications'));
+  await waitFor(() =>
+    expect(f.ui.getByText('Enable reply notifications')).toBeTruthy(),
+  );
+  expect(notifications.enable).toHaveBeenCalledTimes(1);
+  notifications.disable.mockRejectedValueOnce(new Error('provider offline'));
+  fireEvent.press(f.ui.getByText('Sign out'));
+  await waitFor(() => expect(f.leave).toHaveBeenCalled());
+  expect(f.client.logout).toHaveBeenCalledTimes(1);
 });
 test('complete two-layer sign-in, native reads, viewer selection and logout', async () => {
   const f = fixture();

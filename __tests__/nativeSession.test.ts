@@ -11,14 +11,12 @@ test('native adapter isolates session storage and delegates to bounded native tr
   const { nativeSessionIO: io } = require('../src/auth/native');
   const browser = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   expect(await io.load()).toBeNull();
-  jest
-    .mocked(Keychain.getGenericPassword)
-    .mockResolvedValueOnce({
-      username: 'radhouse-session',
-      password: 'synthetic-session',
-      service: 'com.runningdigitally.radhouse.session',
-      storage: 'mock',
-    } as never);
+  jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
+    username: 'radhouse-session',
+    password: 'synthetic-session',
+    service: 'com.runningdigitally.radhouse.session',
+    storage: 'mock',
+  } as never);
   expect(await io.load()).toBe('synthetic-session');
   await io.save('synthetic-session');
   expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
@@ -43,4 +41,20 @@ test('native adapter isolates session storage and delegates to bounded native tr
   await pending;
   jest.useRealTimers();
   browser.mockRestore();
+});
+test('notification preference storage has a separate device-only Keychain service', async () => {
+  const {
+    notificationPreferences,
+  } = require('../src/notifications/nativeConnection');
+  jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce(false);
+  expect(await notificationPreferences.load()).toBeNull();
+  await notificationPreferences.save('synthetic-preference');
+  expect(Keychain.setGenericPassword).toHaveBeenLastCalledWith(
+    'radhouse-push-preference',
+    'synthetic-preference',
+    expect.objectContaining({
+      service: 'com.runningdigitally.radhouse.push-preference',
+      accessible: 'device-only',
+    }),
+  );
 });

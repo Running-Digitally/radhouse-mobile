@@ -84,6 +84,46 @@ function fixture() {
   };
   return { io, client, login };
 }
+test('push capability and mutations are session bound; stale register cannot use a new login', async () => {
+  const f = fixture();
+  await expect(f.client.pushAvailable()).rejects.toThrow('expired');
+  await f.login();
+  f.io.request.mockResolvedValueOnce(response({ available: true }));
+  expect(await f.client.pushAvailable()).toBe(true);
+  f.io.request.mockResolvedValueOnce(response({}, 404));
+  expect(await f.client.pushAvailable()).toBe(false);
+  f.io.request.mockRejectedValueOnce(new Error('offline'));
+  await expect(f.client.pushAvailable()).rejects.toThrow('unavailable');
+  const id = await f.client.newRequestId();
+  const registration = f.client.pushRegistration(id);
+  await registration.register('synthetic-fcm-token-0001', 'ios');
+  expect(f.io.request).toHaveBeenLastCalledWith(
+    ORIGIN + '/chat/push/devices/' + id,
+    'PUT',
+    access,
+    local,
+    csrf,
+    JSON.stringify({ token: 'synthetic-fcm-token-0001', platform: 'ios' }),
+  );
+  await expect(registration.register('bad', 'ios')).rejects.toThrow('invalid');
+  expect(() => f.client.pushRegistration('invalid')).toThrow('invalid');
+  await f.client.logout();
+  await expect(
+    registration.register('synthetic-fcm-token-0001', 'ios'),
+  ).rejects.toThrow('cancelled');
+  f.io.request.mockResolvedValueOnce(response({}, 401));
+  await registration.unregister();
+  expect(f.io.request).toHaveBeenLastCalledWith(
+    ORIGIN + '/chat/push/devices/' + id,
+    'DELETE',
+    access,
+    local,
+    csrf,
+    '',
+  );
+  f.io.request.mockResolvedValueOnce(response({}, 503));
+  await expect(registration.unregister()).rejects.toThrow('unavailable');
+});
 test('Access transfer authenticates the app token, discards organization token and binds the app', async () => {
   const f = fixture();
   const session = await f.login();

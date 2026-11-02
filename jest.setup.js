@@ -11,3 +11,5 @@ jest.mock('react-native-keychain', () => ({
 }));
 
 jest.mock('react-native-webview', () => ({ WebView: 'WebView' }));
+jest.mock('@react-native-firebase/app', () => ({ getApps: jest.fn(() => []) }));
+jest.mock('@react-native-firebase/messaging', () => ({}));

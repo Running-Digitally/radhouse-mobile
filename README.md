@@ -7,12 +7,16 @@ preview with native Chat, Library, Browser, Terminal and Settings screens.
 The preview uses synthetic data. A separate **Connect to my Radhouse** flow now
 implements two-layer sign-in, secure session restoration, native conversation
 and Library reads, explicit message submission, and authenticated Browser and
-Terminal viewers. This connection candidate requires live owner qualification;
-Library downloads/uploads and remote push delivery remain in development.
+Terminal viewers. Native sign-in, saved-session restoration and Terminal opening
+have been qualified in the iOS simulator. Browser opening currently encounters a
+shared server conflict also reproduced in the web app. Library downloads/uploads
+and remote push delivery remain in development.
 
-The Firebase messaging adapter has boundary tests but is not yet connected to a
-backend registration/outbox service. Do not treat the sample notification button
-or a successful native build as evidence of APNs/FCM delivery.
+The Firebase messaging adapter is connected to authenticated registration and
+notification controls. The matching backend outbox is a separate, undeployed
+candidate; the app reports notifications unavailable until configured. Do not
+treat the sample notification button or a successful native build as evidence of
+APNs/FCM delivery.
 
 ## Develop
 

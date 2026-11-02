@@ -143,3 +143,25 @@ repair observes notification consent and cancellation throughout; missing tokens
 fail before backend admission. Tests cover recovery, healthy registrations,
 continued failure/retry and opt-out during recovery. Physical TestFlight delivery
 must still be accepted on the repaired build; source tests alone do not prove it.
+
+### Explicit Apple registration callback
+
+The retry based on the SDK's registered flag was insufficient on a physical
+TestFlight installation. iOS now requests `registerForRemoteNotifications`
+directly through the native bridge after notification permission is granted.
+The AppDelegate resolves that bridge promise only with the callback token.
+JavaScript then maps it through the existing Firebase `setAPNSToken` API before
+registering the installation. The token exists in memory only; it is never
+logged, persisted, displayed or sent to the Radhouse backend.
+A missing callback fails after 20 seconds; UIKit failure and overlapping requests
+also settle the pending promise. The simulator reports that physical-device
+validation is required without attempting UIKit registration.
+
+Firebase registration and backend admission still follow the native callback,
+and opt-out/sign-out invalidates later results. Settings distinguishes Apple,
+Firebase, backend admission and previous-cleanup failures using fixed strings,
+without displaying raw provider errors. Native logs contain only fixed stage
+messages. This repair does not change Android versioning or signing identity.
+JavaScript tests prove ordering and cancellation; a signed native archive proves
+compilation. Neither establishes physical APNs delivery, which remains a release
+acceptance check on the owner's iPhone.

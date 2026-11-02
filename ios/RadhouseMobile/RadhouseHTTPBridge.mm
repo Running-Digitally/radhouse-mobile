@@ -5,4 +5,5 @@ RCT_EXTERN_METHOD(request:(NSString *)url method:(NSString *)method access:(NSSt
 RCT_EXTERN_METHOD(syncCookies:(NSString *)access local:(NSString *)local resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(clearCookies:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(requestNotificationPermission:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(prepareApplePush:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 @end

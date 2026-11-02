@@ -15,6 +15,61 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     return true
   }
+  func application(_ application: UIApplication,
+                   didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    ApplePushRegistration.shared.complete(deviceToken)
+  }
+
+  func application(_ application: UIApplication,
+                   didFailToRegisterForRemoteNotificationsWithError error: Error) {
+    NSLog("Radhouse push: Apple registration failed with code %ld", (error as NSError).code)
+    ApplePushRegistration.shared.fail("apple_registration_failed")
+  }
+}
+
+// All state and callbacks are confined to the main queue. Tokens are never logged or persisted.
+final class ApplePushRegistration {
+  static let shared = ApplePushRegistration()
+  private var resolve: RCTPromiseResolveBlock?
+  private var reject: RCTPromiseRejectBlock?
+  private var timeout: DispatchWorkItem?
+
+  func start(resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    fail("apple_registration_superseded")
+#if targetEnvironment(simulator)
+    reject("apple_simulator", "Use a physical device for notification delivery.", nil)
+#else
+    self.resolve = resolve
+    self.reject = reject
+    let timer = DispatchWorkItem { [weak self] in self?.fail("apple_registration_timeout") }
+    timeout = timer
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timer)
+    NSLog("Radhouse push: requesting Apple registration callback")
+    // Always request the callback; isRegisteredForRemoteNotifications is not token readiness.
+    UIApplication.shared.registerForRemoteNotifications()
+#endif
+  }
+
+  func complete(_ token: Data) {
+    guard let callback = resolve else { return }
+    clear()
+    NSLog("Radhouse push: Apple registration callback received")
+    callback(token.map { String(format: "%02x", $0) }.joined())
+  }
+
+  func fail(_ code: String) {
+    guard let callback = reject else { return }
+    clear()
+    NSLog("Radhouse push: %@", code)
+    callback(code, "Apple notification registration could not complete.", nil)
+  }
+
+  private func clear() {
+    timeout?.cancel()
+    timeout = nil
+    resolve = nil
+    reject = nil
+  }
 }
 
 // UIKit owns the window through its scene lifecycle, including on iOS 27.

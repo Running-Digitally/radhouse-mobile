@@ -634,7 +634,9 @@ export function Connected({
           <Text style={styles.title}>Your connection.</Text>
           <Text style={styles.body}>Signed in as {info?.username}</Text>
           <Text style={styles.subtitle}>
-            {notificationDescriptions[notificationState]}
+            {notificationState === 'error' && notifications
+              ? notifications.failureDescription()
+              : notificationDescriptions[notificationState]}
           </Text>
           {notifications && notificationState !== 'unavailable' && (
             <Action

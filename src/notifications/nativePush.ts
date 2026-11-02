@@ -1,9 +1,7 @@
 import { getApps } from '@react-native-firebase/app';
 import {
   unregister,
-  getAPNSToken,
-  unregisterDeviceForRemoteMessages,
-  registerDeviceForRemoteMessages,
+  setAPNSToken,
   getInitialNotification,
   getMessaging,
   register,
@@ -11,9 +9,15 @@ import {
   onNotificationOpenedApp,
   onRegistered,
 } from '@react-native-firebase/messaging';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import { requestPushPermission } from './permission';
 import { replyNotification, ReplyNotification } from './payload';
+
+export class PushSetupError extends Error {
+  constructor(readonly stage: 'apple' | 'firebase' | 'server' | 'cleanup') {
+    super(`Notification registration failed at ${stage}`);
+  }
+}
 
 export type PushPermission = 'unconfigured' | 'denied' | 'allowed';
 export interface PushRegistration {
@@ -37,7 +41,11 @@ export class NativePush {
     onFailure: () => void,
   ): Promise<PushPermission> {
     const epoch = ++this.epoch;
-    await this.cleanup();
+    try {
+      await this.cleanup();
+    } catch {
+      throw new PushSetupError('cleanup');
+    }
     if (epoch !== this.epoch) {
       return 'denied';
     }
@@ -73,25 +81,15 @@ export class NativePush {
   }
 
   private async prepareAPNs(
-    messaging: ReturnType<typeof getMessaging>,
-    epoch: number,
+    messaging: ReturnType<typeof getMessaging>, epoch: number,
   ): Promise<void> {
-    await registerDeviceForRemoteMessages(messaging);
-    if (epoch !== this.epoch || (await getAPNSToken(messaging))) {
-      return;
-    }
-    // iOS can retain its registered flag while Firebase has no token in this launch.
-    // The SDK then returns early without asking APNs for a fresh callback.
-    if (epoch !== this.epoch) {
-      return;
-    }
-    await unregisterDeviceForRemoteMessages(messaging);
-    if (epoch !== this.epoch) {
-      return;
-    }
-    await registerDeviceForRemoteMessages(messaging);
-    if (epoch === this.epoch && !(await getAPNSToken(messaging))) {
-      throw new Error('Apple notification registration is not ready. Please retry.');
+    try {
+      const token: string = await NativeModules.RadhouseHTTP.prepareApplePush();
+      if (epoch !== this.epoch) { return; }
+      // Keep the callback token in memory only; the existing SDK validates its encoding.
+      await setAPNSToken(messaging, token, 'unknown');
+    } catch {
+      throw new PushSetupError('apple');
     }
   }
 
@@ -120,7 +118,7 @@ export class NativePush {
       };
       const cancel = () => finish(false);
       const timer = setTimeout(
-        () => finish(false, new Error('Push registration timed out')),
+        () => finish(false, new PushSetupError('firebase')),
         30000,
       );
       this.cancelRegistration = cancel;
@@ -129,15 +127,15 @@ export class NativePush {
           this.register(fid, epoch, registration).then(
             () => finish(epoch === this.epoch),
             () => {
-              onFailure();
-              finish(false, new Error('Push registration failed'));
+              if (settled) { onFailure(); }
+              finish(false, new PushSetupError('server'));
             },
           );
         }),
       );
       // Listen first: the SDK may publish its FID before register() resolves.
       register(messaging).catch(() =>
-        finish(false, new Error('Push registration failed')),
+        finish(false, new PushSetupError('firebase')),
       );
     });
   }

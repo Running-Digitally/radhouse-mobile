@@ -25,6 +25,14 @@ class RadhouseHTTP: NSObject {
     }
   }
 
+  @objc(prepareApplePush:rejecter:)
+  func prepareApplePush(_ resolve: @escaping RCTPromiseResolveBlock,
+                        reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      ApplePushRegistration.shared.start(resolve: resolve, reject: reject)
+    }
+  }
+
   @objc(randomBytes:rejecter:)
   func randomBytes(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
     var bytes = [UInt8](repeating: 0, count: 32)

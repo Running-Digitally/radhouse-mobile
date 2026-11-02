@@ -1,6 +1,6 @@
 import { SessionClient } from '../auth/client';
 import { SessionError } from '../auth/types';
-import { NativePush } from './nativePush';
+import { NativePush, PushSetupError } from './nativePush';
 import { NotificationRouter } from './payload';
 
 export type NotificationState =
@@ -28,6 +28,16 @@ export class NotificationConnection {
   private stop: (() => void) | null = null;
   private listener: Listener | null = null;
   private username = '';
+  private setupFailure: PushSetupError['stage'] | null = null;
+  failureDescription(): string {
+    switch (this.setupFailure) {
+      case 'cleanup': return 'Previous notification registration could not be cleared. Please retry.';
+      case 'apple': return 'Apple notification registration did not complete. Please retry.';
+      case 'firebase': return 'Notification delivery registration did not complete. Please retry.';
+      case 'server': return 'Radhouse could not save notification registration. Please retry.';
+      default: return 'Notification setup could not be confirmed. Retry when connected.';
+    }
+  }
   constructor(
     private readonly client: SessionClient,
     private readonly native: NativePush,
@@ -91,6 +101,7 @@ export class NotificationConnection {
       }
     } catch (error) {
       if (epoch === this.epoch) {
+        this.setupFailure = error instanceof PushSetupError ? error.stage : null;
         this.report('error');
       }
       if (!(error instanceof SessionError && error.kind === 'cancelled')) {
@@ -117,6 +128,7 @@ export class NotificationConnection {
     return null;
   }
   async enable() {
+    this.setupFailure = null;
     const epoch = this.epoch;
     this.report('loading');
     try {
@@ -148,6 +160,7 @@ export class NotificationConnection {
       this.report(allowed === 'allowed' ? 'on' : 'off');
     } catch (error) {
       if (epoch === this.epoch) {
+        this.setupFailure = error instanceof PushSetupError ? error.stage : null;
         this.report('error');
       }
       throw error;

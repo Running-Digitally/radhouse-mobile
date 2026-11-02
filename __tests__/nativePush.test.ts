@@ -1,19 +1,17 @@
 import { getApps } from '@react-native-firebase/app';
 import * as messaging from '@react-native-firebase/messaging';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import { requestPushPermission } from '../src/notifications/permission';
 jest.mock('../src/notifications/permission', () => ({
   requestPushPermission: jest.fn(async () => true),
 }));
-import { NativePush } from '../src/notifications/nativePush';
+import { NativePush, PushSetupError } from '../src/notifications/nativePush';
 jest.mock('@react-native-firebase/app', () => ({ getApps: jest.fn() }));
 jest.mock('@react-native-firebase/messaging', () => ({
   getMessaging: jest.fn(() => ({})),
   getInitialNotification: jest.fn(async () => null),
   unregister: jest.fn(async () => undefined),
-  getAPNSToken: jest.fn(),
-  unregisterDeviceForRemoteMessages: jest.fn(async () => undefined),
-  registerDeviceForRemoteMessages: jest.fn(async () => undefined),
+  setAPNSToken: jest.fn(async () => undefined),
   register: jest.fn(),
   onMessage: jest.fn(() => jest.fn()),
   onNotificationOpenedApp: jest.fn(() => jest.fn()),
@@ -29,10 +27,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getApps).mockReturnValue([{}] as ReturnType<typeof getApps>);
   jest.mocked(requestPushPermission).mockResolvedValue(true);
-  jest.mocked(messaging.getAPNSToken).mockResolvedValue('synthetic-apns-token');
-  jest
-    .mocked(messaging.registerDeviceForRemoteMessages)
-    .mockResolvedValue(undefined);
+  NativeModules.RadhouseHTTP = { prepareApplePush: jest.fn(async () => 'ab'.repeat(32)) };
   jest.mocked(messaging.register).mockImplementation(async () => {
     const callback = jest.mocked(messaging.onRegistered).mock.calls.at(-1)![1];
     if (typeof callback === 'function') {
@@ -60,7 +55,7 @@ test('permission denial never fetches a device token', async () => {
     'denied',
   );
   expect(messaging.register).not.toHaveBeenCalled();
-  expect(messaging.registerDeviceForRemoteMessages).not.toHaveBeenCalled();
+  expect(NativeModules.RadhouseHTTP.prepareApplePush).not.toHaveBeenCalled();
 });
 test('registration rotates and remote unregistration is ordered after in-flight writes', async () => {
   const push = new NativePush();
@@ -91,10 +86,10 @@ test('failed remote revocation can be retried instead of falsely reporting compl
 });
 test('logout while APNs registration is pending prevents Firebase registration', async () => {
   let finish!: () => void;
-  jest.mocked(messaging.registerDeviceForRemoteMessages).mockImplementation(
+  jest.mocked(NativeModules.RadhouseHTTP.prepareApplePush).mockImplementation(
     () =>
-      new Promise<void>(resolve => {
-        finish = resolve;
+      new Promise<string>(resolve => {
+        finish = () => resolve('ab'.repeat(32));
       }),
   );
   const push = new NativePush();
@@ -106,6 +101,7 @@ test('logout while APNs registration is pending prevents Firebase registration',
   await push.disable();
   finish();
   expect(await enabling).toBe('denied');
+  expect(messaging.setAPNSToken).not.toHaveBeenCalled();
   expect(backend.register).not.toHaveBeenCalled();
 });
 test('Android registers the FID with its platform without requesting APNs', async () => {
@@ -120,7 +116,7 @@ test('Android registers the FID with its platform without requesting APNs', asyn
     'cSyntheticInstallationID',
     'android',
   );
-  expect(messaging.registerDeviceForRemoteMessages).not.toHaveBeenCalled();
+  expect(NativeModules.RadhouseHTTP.prepareApplePush).not.toHaveBeenCalled();
   await push.disable();
 });
 test('listeners validate foreground, tap and cold-start payloads and unsubscribe', async () => {
@@ -204,7 +200,7 @@ test('SDK failure and FID timeout revoke registration rather than report enabled
   const push = new NativePush();
   const backend = registration();
   await expect(push.enable(backend, jest.fn())).rejects.toThrow(
-    'Push registration failed',
+    'Notification registration failed at firebase',
   );
   expect(backend.unregister).toHaveBeenCalledTimes(1);
   jest.useFakeTimers();
@@ -216,7 +212,7 @@ test('SDK failure and FID timeout revoke registration rather than report enabled
       await Promise.resolve();
     }
     await jest.advanceTimersByTimeAsync(30000);
-    expect(await outcome).toEqual(new Error('Push registration timed out'));
+    expect(await outcome).toEqual(new PushSetupError('firebase'));
     const callback = jest.mocked(messaging.onRegistered).mock.calls.at(-1)![1];
     if (typeof callback === 'function') {
       callback('cLateInstallationID');
@@ -233,9 +229,9 @@ test('failed backend FID admission is surfaced and cleaned up', async () => {
   const failure = jest.fn();
   backend.register.mockRejectedValueOnce(new Error('offline'));
   await expect(push.enable(backend, failure)).rejects.toThrow(
-    'Push registration failed',
+    'Notification registration failed at server',
   );
-  expect(failure).toHaveBeenCalledTimes(1);
+  expect(failure).not.toHaveBeenCalled(); // Initial failure rejects with its stage.
   expect(backend.unregister).toHaveBeenCalled();
 });
 
@@ -276,57 +272,56 @@ test('enabled is reported only after the server acknowledges the initial FID', a
 });
 
 
-test('refreshes stale iOS registration before requesting a Firebase installation', async () => {
-  jest.mocked(messaging.getAPNSToken).mockResolvedValueOnce(null);
-  const backend = registration();
-  const push = new NativePush();
-  expect(await push.enable(backend, jest.fn())).toBe('allowed');
-  expect(messaging.registerDeviceForRemoteMessages).toHaveBeenCalledTimes(2);
-  expect(messaging.unregisterDeviceForRemoteMessages).toHaveBeenCalledTimes(1);
-  expect(jest.mocked(messaging.unregisterDeviceForRemoteMessages).mock.invocationCallOrder[0])
-    .toBeLessThan(jest.mocked(messaging.registerDeviceForRemoteMessages).mock.invocationCallOrder[1]);
-  expect(jest.mocked(messaging.registerDeviceForRemoteMessages).mock.invocationCallOrder[1])
-    .toBeLessThan(jest.mocked(messaging.register).mock.invocationCallOrder[0]);
-  expect(backend.register).toHaveBeenCalledWith('cSyntheticInstallationID', 'ios');
-  await push.disable();
-});
-
-test('does not reset healthy APNs registration', async () => {
-  const push = new NativePush();
-  await push.enable(registration(), jest.fn());
-  expect(messaging.registerDeviceForRemoteMessages).toHaveBeenCalledTimes(1);
-  expect(messaging.unregisterDeviceForRemoteMessages).not.toHaveBeenCalled();
-  await push.disable();
-});
-
-test('missing APNs token after refresh fails before Firebase and can be retried', async () => {
-  jest.mocked(messaging.getAPNSToken).mockResolvedValue(null);
-  const push = new NativePush();
-  const backend = registration();
-  await expect(push.enable(backend, jest.fn())).rejects.toThrow('Apple notification registration is not ready');
-  expect(messaging.register).not.toHaveBeenCalled();
-  expect(backend.register).not.toHaveBeenCalled();
-  expect(backend.unregister).toHaveBeenCalledTimes(1);
-  jest.mocked(messaging.getAPNSToken).mockResolvedValue('synthetic-apns-token');
-  expect(await push.enable(backend, jest.fn())).toBe('allowed');
-  await push.disable();
-});
-
-test('opt-out during APNs refresh prevents re-registration and backend admission', async () => {
-  jest.mocked(messaging.getAPNSToken).mockResolvedValueOnce(null);
+test('waits for the real Apple callback before registering Firebase', async () => {
   let finish!: () => void;
-  jest.mocked(messaging.unregisterDeviceForRemoteMessages).mockImplementationOnce(
-    () => new Promise<void>(resolve => { finish = resolve; }),
+  NativeModules.RadhouseHTTP.prepareApplePush.mockImplementationOnce(
+    () => new Promise<string>(resolve => { finish = () => resolve('ab'.repeat(32)); }),
   );
   const push = new NativePush();
   const backend = registration();
   const enabling = push.enable(backend, jest.fn());
-  for (let index = 0; index < 24; index++) { await Promise.resolve(); }
-  expect(finish).toBeDefined();
-  await push.disable();
-  finish();
-  expect(await enabling).toBe('denied');
-  expect(messaging.registerDeviceForRemoteMessages).toHaveBeenCalledTimes(1);
+  for (let i = 0; i < 16; i++) { await Promise.resolve(); }
   expect(messaging.register).not.toHaveBeenCalled();
   expect(backend.register).not.toHaveBeenCalled();
+  finish();
+  expect(await enabling).toBe('allowed');
+  expect(backend.register).toHaveBeenCalledWith('cSyntheticInstallationID', 'ios');
+  expect(messaging.setAPNSToken).toHaveBeenCalledWith(expect.anything(), 'ab'.repeat(32), 'unknown');
+  expect(jest.mocked(messaging.setAPNSToken).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(messaging.register).mock.invocationCallOrder[0]);
+  await push.disable();
+});
+
+test('Apple timeout is distinct from Firebase failure and a retry requests a new callback', async () => {
+  NativeModules.RadhouseHTTP.prepareApplePush.mockRejectedValueOnce(new Error('native timeout'));
+  const push = new NativePush();
+  const backend = registration();
+  await expect(push.enable(backend, jest.fn())).rejects.toEqual(new PushSetupError('apple'));
+  expect(messaging.register).not.toHaveBeenCalled();
+  expect(backend.register).not.toHaveBeenCalled();
+  expect(await push.enable(backend, jest.fn())).toBe('allowed');
+  expect(NativeModules.RadhouseHTTP.prepareApplePush).toHaveBeenCalledTimes(2);
+  await push.disable();
+});
+
+test('failed previous cleanup is distinct and does not start a new Apple registration', async () => {
+  const push = new NativePush();
+  const backend = registration();
+  await push.enable(backend, jest.fn());
+  backend.unregister.mockRejectedValueOnce(new Error('private transport details'));
+  await expect(push.enable(backend, jest.fn())).rejects.toEqual(new PushSetupError('cleanup'));
+  expect(NativeModules.RadhouseHTTP.prepareApplePush).toHaveBeenCalledTimes(1);
+  await push.disable();
+});
+
+test('failed later FID rotation still notifies the connection', async () => {
+  const push = new NativePush();
+  const backend = registration();
+  const failure = jest.fn();
+  await push.enable(backend, failure);
+  backend.register.mockRejectedValueOnce(new Error('offline'));
+  const callback = jest.mocked(messaging.onRegistered).mock.calls.at(-1)![1];
+  if (typeof callback === 'function') { callback('cRotatedInstallationID'); }
+  for (let i = 0; i < 16; i++) { await Promise.resolve(); }
+  expect(failure).toHaveBeenCalledTimes(1);
+  await push.disable();
 });

@@ -71,6 +71,7 @@ test('notification controls preserve consent, verify a tapped target, and revoke
       listener.state('off');
     }),
     enable: jest.fn(async () => callbacks.state('on')),
+    failureDescription: () => 'Notification setup could not be confirmed. Retry when connected.',
     disable: jest.fn(async () => callbacks.state('off')),
     disconnect: jest.fn(),
   };

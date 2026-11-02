@@ -132,3 +132,41 @@ test('listeners validate foreground, tap and cold-start payloads and unsubscribe
     .mock.calls[0][1]({ data: payload });
   expect(open).toHaveBeenCalledTimes(1);
 });
+
+test('an immediate opt-out cancels enable before its initial cleanup completes', async () => {
+  const push = new NativePush();
+  const backend = registration();
+  const enabling = push.enable(backend, jest.fn());
+  await push.disable();
+  expect(await enabling).toBe('denied');
+  expect(messaging.requestPermission).not.toHaveBeenCalled();
+  expect(backend.register).not.toHaveBeenCalled();
+});
+
+test('a previous cleanup cannot delete the token of a newer registration', async () => {
+  const push = new NativePush();
+  const previous = registration();
+  await push.enable(previous, jest.fn());
+  let finish!: () => void;
+  previous.unregister.mockImplementationOnce(
+    () =>
+      new Promise<undefined>(resolve => {
+        finish = () => resolve(undefined);
+      }),
+  );
+  const disabling = push.disable();
+  const next = registration();
+  const enabling = push.enable(next, jest.fn());
+  for (let i = 0; i < 12; i++) {
+    await Promise.resolve();
+  }
+  expect(next.register).not.toHaveBeenCalled();
+  finish();
+  await disabling;
+  expect(await enabling).toBe('allowed');
+  expect(next.register).toHaveBeenCalledTimes(1);
+  expect(messaging.deleteToken).toHaveBeenCalledTimes(1);
+  expect(
+    jest.mocked(messaging.deleteToken).mock.invocationCallOrder[0],
+  ).toBeLessThan(next.register.mock.invocationCallOrder[0]);
+});

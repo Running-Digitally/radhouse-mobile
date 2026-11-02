@@ -362,3 +362,51 @@ test('history opens at the bottom, preserves reading position, and keeps the com
     scroll.mockRestore();
   }
 });
+
+test('logout invalidates the session immediately while notification cleanup is pending', async () => {
+  let finish!: () => void;
+  const notifications = {
+    connect: jest.fn(async () => undefined),
+    disconnect: jest.fn(),
+    disable: jest.fn(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        }),
+    ),
+  };
+  const f = fixture(info, notifications as unknown as NotificationConnection);
+  await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
+  fireEvent.press(f.ui.getByText('Settings'));
+  fireEvent.press(f.ui.getByText('Sign out'));
+  expect(f.client.logout).toHaveBeenCalledTimes(1);
+  fireEvent.press(f.ui.getByText('Sign in with Access'));
+  expect(f.client.accessLogin).not.toHaveBeenCalled();
+  await act(async () => finish());
+  expect(f.leave).toHaveBeenCalledTimes(1);
+});
+
+test('sending from a notification returns to the current conversation', async () => {
+  let callbacks!: Parameters<NotificationConnection['connect']>[1];
+  const notifications = {
+    connect: jest.fn(async (_username: string, listener: typeof callbacks) => {
+      callbacks = listener;
+    }),
+    disconnect: jest.fn(),
+  };
+  const f = fixture(info, notifications as unknown as NotificationConnection);
+  await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
+  act(() => callbacks.open(turn.request_id));
+  await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
+  expect(f.ui.getByText('Back to current conversation')).toBeTruthy();
+  fireEvent.changeText(
+    f.ui.getByLabelText('Message Radhouse'),
+    'Next question',
+  );
+  fireEvent.press(f.ui.getByText('Send message'));
+  await waitFor(() =>
+    expect(f.ui.queryByText('Back to current conversation')).toBeNull(),
+  );
+  await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
+  expect(f.client.read).toHaveBeenLastCalledWith('/chat/reply');
+});

@@ -118,6 +118,7 @@ export function Connected({
   const followingLatest = useRef(true);
   const generation = useRef(0);
   const activeRef = useRef(active);
+  const signingOut = useRef(false);
 
   const run = useCallback(
     async (action: () => Promise<void>, quiet = false) => {
@@ -148,8 +149,10 @@ export function Connected({
             setReplyReady(false);
             setText('');
             setStep('access');
-            await notifications?.disable().catch(() => undefined);
-            await client.logout().catch(() => undefined);
+            await Promise.all([
+              client.logout().catch(() => undefined),
+              notifications?.disable().catch(() => undefined),
+            ]);
           }
         }
       } finally {
@@ -282,10 +285,14 @@ export function Connected({
   }, [step, active, destination, run, refresh, revalidate]);
 
   async function signOut() {
+    if (signingOut.current) {
+      return;
+    }
+    signingOut.current = true;
     generation.current++;
-    busyRef.current = false;
+    busyRef.current = true;
     pollingRef.current = false;
-    setBusy(false);
+    setBusy(true);
     setInfo(null);
     setTurns([]);
     setFiles([]);
@@ -298,13 +305,19 @@ export function Connected({
     setStep('access');
     try {
       // Server session revocation remains authoritative if device cleanup fails.
-      await notifications?.disable().catch(() => undefined);
-      await client.logout();
+      await Promise.all([
+        client.logout(),
+        notifications?.disable().catch(() => undefined),
+      ]);
       leave();
     } catch {
       setError(
         'Signed out on this device. Server revocation could not be confirmed.',
       );
+    } finally {
+      signingOut.current = false;
+      busyRef.current = false;
+      setBusy(false);
     }
   }
   async function signIn() {
@@ -342,7 +355,15 @@ export function Connected({
     }
     setPending(null);
     setText('');
-    await refresh();
+    if (notificationRequest) {
+      setNotificationRequest(null);
+      setReplyReady(false);
+    }
+    const version = ++refreshVersion.current;
+    const result = await client.read('/chat/reply');
+    if (epoch === generation.current && version === refreshVersion.current) {
+      setTurns(readTurns(result.turns));
+    }
   }
   if (step === 'workspace' && active && !verified) {
     return (

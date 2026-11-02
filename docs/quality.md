@@ -78,8 +78,8 @@ revision. Use `python3 scripts/sonar_scan.py --help` for its supported options.
 
 Store the owner-created Project Analysis Token in macOS Keychain as service
 `homelab/sonarqube/radhouse-mobile`, account `radhouse-mobile-analysis`.
-Do not put the value in chat, Git, shell arguments, or a PR. Project registration
-is complete; token provisioning and the first processed main scan remain pending.
+Do not put the value in chat, Git, shell arguments, or a PR. Project registration and dedicated Keychain token provisioning are complete;
+the first processed main scan remains pending.
 
 The live-session candidate touches new authentication and viewer code. There is
 still no processed mobile Sonar baseline to inspect; no finding has been
@@ -98,8 +98,18 @@ accepts the corrected request with HTTP200, and dispatches only once on retry.
 A live simulator message completed with the repaired native transport. No merged-main mobile
 scan has processed, so these checks do not establish SonarQube closure.
 
-The production dependency audit currently reports 24 affected package entries
-(6 high, 15 moderate, 3 low), including transitive Firebase JavaScript and build
-tool dependencies. Automatic remediation proposes incompatible major changes
-or a Firebase downgrade; it has not been applied. Dependency qualification is
-still open and must not be described as clean.
+The pre-merge review fixed immediate opt-out and overlapping push-cleanup races,
+invalidated the session before waiting for remote notification cleanup on logout,
+and returned Chat to the current conversation after sending from a notification.
+Four regression tests cover these cases. The reviewed candidate passes 77 Jest
+and 15 scanner-tooling tests, typecheck and lint, with 94.82% line coverage.
+
+The dependency review pinned patched `@grpc/grpc-js` 1.14.7 and updated the React
+Native CLI packages to 20.2.0. The production dependency audit now reports zero
+high/critical findings and 13 affected low/moderate package entries. The remaining
+root advisories concern deepmerge prototype poisoning and minimatch glob-pattern
+amplification in development/build tooling. No patched deepmerge 4.x is published;
+minimatch remediation requires a breaking API migration in its parent tools.
+Do not use untrusted CLI configuration or glob patterns. Track compatibility
+qualification separately; these are dependency limitations, not Sonar findings,
+and have not been suppressed.

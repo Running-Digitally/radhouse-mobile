@@ -24,6 +24,7 @@ export class NativePush {
   private epoch = 0;
   private subscriptions: (() => void)[] = [];
   private updates: Promise<void> = Promise.resolve();
+  private cleanups: Promise<void> = Promise.resolve();
   private registration: PushRegistration | null = null;
 
   configured(): boolean {
@@ -33,11 +34,14 @@ export class NativePush {
     registration: PushRegistration,
     onFailure: () => void,
   ): Promise<PushPermission> {
-    await this.disable();
+    const epoch = ++this.epoch;
+    await this.cleanup();
+    if (epoch !== this.epoch) {
+      return 'denied';
+    }
     if (!this.configured()) {
       return 'unconfigured';
     }
-    const epoch = ++this.epoch;
     const messaging = getMessaging();
     let allowed: boolean;
     if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
@@ -136,7 +140,16 @@ export class NativePush {
   }
   async disable(): Promise<void> {
     this.epoch++;
+    await this.cleanup();
+  }
+  private cleanup(): Promise<void> {
     this.subscriptions.splice(0).forEach(stop => stop());
+    this.cleanups = this.cleanups
+      .catch(() => undefined)
+      .then(() => this.clearRegistration());
+    return this.cleanups;
+  }
+  private async clearRegistration(): Promise<void> {
     const registration = this.registration;
     await this.updates.catch(() => undefined);
     // Unregistration failure must remain visible to the caller; never claim remote revocation.

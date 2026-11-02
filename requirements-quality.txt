@@ -1,0 +1,2 @@
+# Offline test instrumentation after this explicit setup step.
+coverage==7.15.4

@@ -1,0 +1,180 @@
+import React, { useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { TabBar } from './src/components/TabBar';
+import { Connected } from './src/screens/Connected';
+import { createMobileNotifications } from './src/notifications/nativeConnection';
+import { NotificationConnection } from './src/notifications/connection';
+import { nativeSession } from './src/auth/native';
+import { Action } from './src/components/Action';
+import { Chat } from './src/screens/Chat';
+import { Library } from './src/screens/Library';
+import { Browser } from './src/screens/Browser';
+import { Terminal } from './src/screens/Terminal';
+import { Settings } from './src/screens/Settings';
+import { Destination, sampleTurns, Turn } from './src/workspace';
+import { colors, styles } from './src/theme';
+function Workspace() {
+  const [connected, setConnected] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationConnection>();
+  const [turns, setTurns] = useState<readonly Turn[]>(sampleTurns);
+  const [preview, setPreview] = useState(false);
+  const [destination, setDestination] = useState<Destination>('Chat');
+  const [notification, setNotification] = useState(false);
+  function leave() {
+    setTurns(sampleTurns);
+    setPreview(false);
+    setNotification(false);
+    setDestination('Chat');
+  }
+  function screen() {
+    switch (destination) {
+      case 'Chat':
+        return <Chat turns={turns} setTurns={setTurns} />;
+      case 'Library':
+        return <Library />;
+      case 'Browser':
+        return <Browser />;
+      case 'Terminal':
+        return <Terminal />;
+      case 'Settings':
+        return (
+          <Settings
+            signOut={leave}
+            previewNotification={() => setNotification(true)}
+          />
+        );
+    }
+  }
+  return (
+    <SafeAreaView style={styles.screen}>
+      <View style={[appStyles.header, connected && appStyles.compactHeader]}>
+        <Text style={appStyles.brand}>radhouse</Text>
+        {!connected && <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>}
+      </View>
+      {connected ? (
+        <KeyboardAvoidingView
+          style={styles.grow}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Connected
+            client={nativeSession}
+            notifications={notifications}
+            leave={() => {
+              setConnected(false);
+              setNotifications(undefined);
+            }}
+          />
+        </KeyboardAvoidingView>
+      ) : preview ? (
+        <>
+          <View style={appStyles.preview}>
+            <Text style={styles.small}>Development preview · sample data</Text>
+          </View>
+          {notification && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open sample reply notification"
+              style={appStyles.notification}
+              onPress={() => {
+                setDestination('Chat');
+                setNotification(false);
+              }}
+            >
+              <Text style={styles.body}>Your Radhouse reply is ready</Text>
+              <Text style={styles.small}>
+                Sample notification · tap to return to Chat
+              </Text>
+            </Pressable>
+          )}
+          <KeyboardAvoidingView
+            style={styles.grow}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            {screen()}
+          </KeyboardAvoidingView>
+          <TabBar destination={destination} select={setDestination} />
+        </>
+      ) : (
+        <View style={[styles.page, appStyles.welcome]}>
+          <View style={appStyles.mark}>
+            <Text style={appStyles.markText}>r.</Text>
+          </View>
+          <Text style={styles.eyebrow}>YOUR ASSISTANT. YOUR SPACE.</Text>
+          <Text style={appStyles.welcomeTitle}>
+            Bring a thought.{'\n'}Find a little clarity.
+          </Text>
+          <Text style={styles.subtitle}>
+            Your conversation, files and workspace, together wherever you are.
+          </Text>
+          <Action
+            title="Connect to my Radhouse"
+            onPress={() => {
+              setNotifications(createMobileNotifications());
+              setConnected(true);
+            }}
+          />
+          <Action
+            title="Explore the app preview"
+            onPress={() => setPreview(true)}
+          />
+          <Text style={styles.small}>
+            Connect to your account, or explore with sample data.
+          </Text>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Workspace />
+    </SafeAreaProvider>
+  );
+}
+const appStyles = StyleSheet.create({
+  header: { paddingHorizontal: 24, paddingVertical: 18, gap: 6 },
+  compactHeader: { paddingVertical: 8 },
+  brand: {
+    fontSize: 27,
+    fontWeight: '700',
+    letterSpacing: -1,
+    color: colors.ink,
+  },
+  welcome: { flex: 1, justifyContent: 'center', paddingBottom: 60, gap: 24 },
+  welcomeTitle: {
+    fontSize: 36,
+    lineHeight: 43,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  mark: {
+    width: 72,
+    height: 72,
+    backgroundColor: colors.ink,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markText: { fontSize: 46, color: colors.paper, fontWeight: '600' },
+  preview: {
+    paddingVertical: 6,
+    alignItems: 'center',
+    backgroundColor: colors.soft,
+  },
+  notification: {
+    padding: 14,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: colors.accent,
+    gap: 4,
+  },
+});

@@ -86,9 +86,15 @@ The follow-up remediation replaces deprecated Firebase token/permission APIs,
 extracts native request-admission/response helpers, simplifies UI conditionals,
 and marks immutable members and component props read-only. No issues, rules,
 profiles, quality gates or source coverage have been suppressed or excluded.
-A subsequent exact merged-main scan must confirm closure.
+The confirmation scan of merged main
+`0ee8a2583f393fec0cf8f77d63769ad4d87bd540` passed on 2026-11-02.
+All 23 findings closed: zero open security, reliability or maintainability issues,
+zero accepted issues and zero security hotspots. Overall coverage is 90.3%;
+new-code coverage is 80.7%. Both overall and new-code duplication are 0.0%.
+The scanner receipt records the exact SCM revision and server quality-gate PASS;
+the authenticated dashboard independently confirms the processed measures.
 
-The remediation candidate passes 86 Jest tests, 15 scanner-tooling tests,
+The merged remediation passes 86 Jest tests, 15 scanner-tooling tests,
 TypeScript and lint, with 95.30% line coverage. Tests cover Firebase Installation
 ID acknowledgement, rotation, timeout, opt-out races, failed admission and
 platform notification permissions. The existing backend validates the synthetic
@@ -98,7 +104,7 @@ replacement for physical delivery verification after updating the app.
 The pre-merge review fixed immediate opt-out and overlapping push-cleanup races,
 invalidated the session before waiting for remote notification cleanup on logout,
 and returned Chat to the current conversation after sending from a notification.
-Four regression tests cover these cases. The reviewed candidate passes 77 Jest
+Four regression tests cover these cases. That initial reviewed candidate passed 77 Jest
 and 15 scanner-tooling tests, typecheck and lint, with 94.82% line coverage.
 
 The dependency review pinned patched `@grpc/grpc-js` 1.14.7 and updated the React

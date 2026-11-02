@@ -46,8 +46,9 @@ the existing Radhouse brand mark; see [the asset source](assets/brand/README.md)
 An archive build is not an uploaded or accepted TestFlight release.
 
 Internal TestFlight **1.0 (1)** from `c139649` was uploaded, processed and assigned
-to the owner's test group on 2026-11-02; Apple reports **Testing**. Physical-device
-launch/sign-in acceptance and remote push delivery remain pending. The upload
+to the owner's test group on 2026-11-02; Apple reports **Testing**. The owner
+confirmed installation, sign-in and native Chat opening on a physical iPhone.
+Remote push delivery remains pending. The upload
 has missing debug-symbol warnings for prebuilt React, ReactNativeDependencies
 and Hermes frameworks, which limit crash symbolication inside those dependencies.
 

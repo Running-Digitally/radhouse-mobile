@@ -52,6 +52,12 @@ confirmed installation, sign-in and native Chat opening on a physical iPhone.
 The owner also confirmed native Chat on a physical Samsung after installing a
 standalone, bundled Android 1.0 (1) build signed for owner testing. This Android
 build does not require Metro; its signing key is retained privately for updates.
+Android 1.0 (2), from `93aa97e`, is installed on the owner's Samsung. It includes
+the canonical Radhouse launcher icon, including adaptive icon variants, and
+fixes Chat's refresh flicker, initial scroll position and composer placement.
+Background refresh no longer disables the input or blocks sending. The iOS
+simulator confirms that the composer stays visible above the onscreen keyboard
+across refreshes; physical-device acceptance of these fixes remains pending.
 Remote push delivery remains under qualification. The TestFlight upload
 has missing debug-symbol warnings for prebuilt React, ReactNativeDependencies
 and Hermes frameworks, which limit crash symbolication inside those dependencies.

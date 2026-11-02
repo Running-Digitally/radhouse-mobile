@@ -37,6 +37,19 @@ For Android, configure the Android SDK and JDK 17, then use `npm run android`.
 `cd android && ./gradlew :app:assembleDebug` validates the native debug build.
 Device distribution and production signing are separate from these local builds.
 
+The owner selected internal TestFlight for iPhone delivery. Prepare a Release
+archive with the configured Apple team and automatic signing, then validate and
+distribute through Xcode's **TestFlight Internal Only** flow. Use production APNs
+credentials for TestFlight; a sandbox key cannot qualify notification delivery.
+The native app already adopts UIKit scenes for iOS 27. Its icon is rendered from
+the existing Radhouse brand mark; see [the asset source](assets/brand/README.md).
+An archive build is not an uploaded or accepted TestFlight release.
+
+Complete Apple's encryption questionnaire from the actual implementation: the
+app uses platform HTTPS/Keychain and bundled TweetNaCl for encrypted Access-token
+transfer. Do not declare it OS-crypto-only. Keep signing credentials, archives,
+client configurations and upload receipts outside Git.
+
 ## Push setup
 
 Use separate iOS and Android Firebase registrations for

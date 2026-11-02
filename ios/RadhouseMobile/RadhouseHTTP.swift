@@ -9,6 +9,8 @@ private let appOrigin = "https://radhouse.sati.sh"
 @objc(RadhouseHTTP)
 class RadhouseHTTP: NSObject {
   @objc static func requiresMainQueueSetup() -> Bool { false }
+  // One native workspace binding for this bridge lifetime; retries keep the same binding.
+  private let workspaceTab = UUID().uuidString.lowercased()
 
   @objc(randomBytes:rejecter:)
   func randomBytes(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
@@ -40,6 +42,7 @@ class RadhouseHTTP: NSObject {
     if url.host == appHost {
       request.setValue(access, forHTTPHeaderField: "cf-access-token")
       request.setValue(appOrigin, forHTTPHeaderField: "Origin")
+      request.setValue(workspaceTab, forHTTPHeaderField: "X-Radhouse-Browser-Tab")
       if !local.isEmpty { request.setValue("radhouse_session=\(local)", forHTTPHeaderField: "Cookie") }
       if !csrf.isEmpty { request.setValue(csrf, forHTTPHeaderField: "x-radhouse-csrf") }
     }

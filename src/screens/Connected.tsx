@@ -72,6 +72,9 @@ function failure(error: unknown): string {
   if (error instanceof SessionError && error.kind === 'pending') {
     return 'Browser sign-in timed out. Start again when you are ready.';
   }
+  if (error instanceof SessionError && error.kind === 'conflict') {
+    return 'Radhouse reported a workspace conflict. Your message is kept for retry.';
+  }
   return 'Connection could not be confirmed. Retry when you are connected.';
 }
 

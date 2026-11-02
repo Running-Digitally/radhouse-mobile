@@ -156,24 +156,39 @@ test('complete two-layer sign-in, native reads, viewer selection and logout', as
   fireEvent.press(f.ui.getByText('Sign out'));
   await waitFor(() => expect(f.leave).toHaveBeenCalled());
 });
-test('uncertain Send retains frozen text and the same request ID on explicit retry', async () => {
-  const f = fixture(info);
-  await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
-  f.client.send.mockRejectedValueOnce(new SessionError('unavailable'));
-  fireEvent.changeText(
-    f.ui.getByLabelText('Message Radhouse'),
-    'A single request',
-  );
-  fireEvent.press(f.ui.getByText('Send message'));
-  await waitFor(() =>
-    expect(f.ui.getByText('Retry same message')).toBeTruthy(),
-  );
-  expect(f.ui.getByLabelText('Message Radhouse').props.editable).toBe(false);
-  fireEvent.press(f.ui.getByText('Retry same message'));
-  await waitFor(() => expect(f.ui.getByText('Send message')).toBeTruthy());
-  expect(f.client.newRequestId).toHaveBeenCalledTimes(1);
-  expect(f.client.send.mock.calls[0]).toEqual(f.client.send.mock.calls[1]);
-});
+test.each(['unavailable', 'conflict'] as const)(
+  'Send failure (%s) retains frozen text and the same request ID on explicit retry',
+  async kind => {
+    const f = fixture(info);
+    await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
+    f.client.send.mockRejectedValueOnce(new SessionError(kind));
+    fireEvent.changeText(
+      f.ui.getByLabelText('Message Radhouse'),
+      'A single request',
+    );
+    fireEvent.press(f.ui.getByText('Send message'));
+    await waitFor(() =>
+      expect(f.ui.getByText('Retry same message')).toBeTruthy(),
+    );
+    expect(f.ui.getByLabelText('Message Radhouse').props.editable).toBe(false);
+    if (kind === 'conflict') {
+      expect(
+        f.ui.getByText(
+          'Radhouse reported a workspace conflict. Your message is kept for retry.',
+        ),
+      ).toBeTruthy();
+      expect(
+        f.ui.queryByText(
+          'Connection could not be confirmed. Retry when you are connected.',
+        ),
+      ).toBeNull();
+    }
+    fireEvent.press(f.ui.getByText('Retry same message'));
+    await waitFor(() => expect(f.ui.getByText('Send message')).toBeTruthy());
+    expect(f.client.newRequestId).toHaveBeenCalledTimes(1);
+    expect(f.client.send.mock.calls[0]).toEqual(f.client.send.mock.calls[1]);
+  },
+);
 test('cancelled browser login cannot reopen the workspace', async () => {
   const f = fixture();
   await waitFor(() =>

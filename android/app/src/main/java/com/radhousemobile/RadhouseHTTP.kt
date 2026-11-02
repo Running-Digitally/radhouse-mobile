@@ -12,6 +12,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.security.SecureRandom
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 private const val APP_HOST = "radhouse.sati.sh"
@@ -19,6 +20,8 @@ private const val ORIGIN = "https://radhouse.sati.sh"
 
 class RadhouseHTTP(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   override fun getName() = "RadhouseHTTP"
+  // One native workspace binding for this bridge lifetime; retries keep the same binding.
+  private val workspaceTab = UUID.randomUUID().toString()
   private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
     .cookieJar(CookieJar.NO_COOKIES).cache(null).callTimeout(70,TimeUnit.SECONDS)
     .readTimeout(65,TimeUnit.SECONDS).build()
@@ -43,6 +46,7 @@ class RadhouseHTTP(context: ReactApplicationContext) : ReactContextBaseJavaModul
     val request = Request.Builder().url(url).header("Accept","application/json")
     if (app) {
       request.header("cf-access-token",access).header("Origin",ORIGIN)
+      request.header("X-Radhouse-Browser-Tab",workspaceTab)
       if (local.isNotEmpty()) request.header("Cookie","radhouse_session=$local")
       if (csrf.isNotEmpty()) request.header("x-radhouse-csrf",csrf)
     }

@@ -1,6 +1,6 @@
 # Radhouse Mobile design
 
-Date: 2026-11-02. Status: proposal; implementation and device proof pending.
+Date: 2026-11-02. Status: native preview implemented; live integration and device proof pending.
 Design depth: D2, because native authentication and the backend contract cross
 trust boundaries. The immediate operational prerequisite is a protected HTTPS
 hostname usable without a device VPN.
@@ -9,7 +9,9 @@ hostname usable without a device VPN.
 
 Open the app, authenticate, return to the same assistant conversation, send a
 message, leave, and resume the eventual reply. Make Chat the initial screen,
-with Library and Settings as the other primary destinations. Show the assistant's
+with Library, Browser, Terminal and Settings as the other primary destinations.
+Owner scope update on 2026-11-02: include the streaming browser, owner terminal
+and working push notifications in the mobile delivery plan. Show the assistant's
 existing name and appearance rather than inventing a separate mobile identity.
 
 Use a native React Native/TypeScript application with iOS and Android platform
@@ -20,7 +22,7 @@ implementation time. Simulator work precedes signing and device distribution.
 
 ## Source-backed boundary
 
-Reviewed Radhouse source at `83788dfd6db55ca655551ef5302083990a2a2133`:
+Reviewed Radhouse source at `b85f45cebbb6f2cb5f939ee8c8fb6f5a303edc6e`:
 
 - `src/radhouse/chat/main.py` wires local authentication, the transcript store,
   the Hermes client, browser services and optional features.
@@ -75,7 +77,10 @@ Proposed modules:
 | `src/api/` | Fixed-origin requests, response validation and typed errors |
 | `src/chat/` | Transcript, composer, pending reply reconciliation and retry UX |
 | `src/library/` | Existing file list, original download and explicit upload/share |
-| `src/settings/` | Account state, connectivity, capability/version information |
+| `src/browser/` | Authenticated streaming viewer, touch input and existing control modes |
+| `src/terminal/` | Existing terminal viewer, explicit open/close and reconnect |
+| `src/notifications/` | Permission, device registration, reply-ready delivery and safe deep links |
+| `src/settings/` | Account state, connectivity, notification permission and capabilities |
 | `src/fixtures/` | Clearly labelled synthetic development transport |
 
 The client exposes `restoreSession`, `signIn`, `signOut`, `readConversation`,
@@ -114,9 +119,65 @@ contracts are designed. Hide private content in task-switcher previews.
 5. **Devices and distribution:** physical iPhone/Android proof, signing,
    TestFlight and Android delivery after separate release authorization.
 
-Browser observation/control, voice, share extensions, push, background sync,
-Terminal and editable administration follow after the core conversation flow.
-They have distinct privacy and lifecycle contracts and are not first-slice work.
+Browser, Terminal and push are included in the requested mobile scope. Voice,
+share extensions, background sync and editable administration remain later work.
+Their inclusion does not claim that a synthetic simulator slice establishes live
+streaming, terminal commands or remote push delivery.
+
+## Browser and Terminal implementation boundary
+
+Keep native Chat, Library and navigation. Embed the existing authenticated Browser
+and Terminal viewers in a restricted web surface initially, rather than replace
+the streaming codec, terminal renderer or server authority checks. Both surfaces
+require a qualified adapter for Access and local Radhouse sessions; arbitrary
+external pages must never receive application credentials or a native bridge.
+
+The reviewed backend at `b85f45cebbb6f2cb5f939ee8c8fb6f5a303edc6e` provides:
+
+- Browser assets and a WebSocket relay under `/chat/browser/stream/`, authenticated
+  to the current principal, conversation and session binding. Preserve the
+  existing Private/Observe modes, explicit takeover/return and lease checks.
+- Terminal POST operations under `/chat/terminal/`: open, status, output, input,
+  resize, close and context-scrub. Output uses a bounded cursor and long polling;
+  input has sequence acknowledgements and terminal generation/attachment binding.
+  Do not describe this terminal transport as a WebSocket.
+
+Opening either screen is read-only until the owner explicitly opens a terminal
+or takes browser control. Test touch/keyboard input, landscape layout, app
+backgrounding and reconnect. Never replay an unconfirmed terminal write, reopen
+a closed terminal automatically, or silently share terminal/browser content into
+a chat message. Pause viewers on backgrounding and restore only after checking
+authentication and current server ownership.
+
+## Push notification contract
+
+Initial notification: a reply becomes ready after the owner sends a message. The
+server remains the delivery authority; a suspended app cannot reliably discover
+completion by polling. Add a reviewed backend registration/delivery contract and
+an idempotent completion event keyed to the existing request UUID. Keep APNs and
+FCM credentials on the server, outside Git and the app binary.
+
+The app requests notification permission in context, registers its platform token
+only after local owner authentication, refreshes rotated tokens, and unregisters
+the device on sign-out. Revoked/invalid tokens must stop receiving notifications.
+Separate app identifiers and device registrations from other products. Provider
+configuration and signing must be verified before sending any real push.
+
+Use a generic “Your Radhouse reply is ready” notification by default, with a
+versioned opaque request identifier and event identifier. Do not include reply
+text, command output, filenames, credentials or arbitrary navigation URLs. On
+tap, validate the payload, restore authentication, and reconcile the request
+against the existing owner-bound conversation before opening it. A notification
+is a hint, not authority or an instruction to send/retry a message. Deduplicate
+foreground/tap delivery and ignore stale responses after sign-out.
+
+Acceptance includes notification denial, token rotation, logout, duplicate and
+malformed payloads, offline tap, cold launch, foreground and background delivery.
+Simulator push injection proves presentation/routing only. Actual APNs/FCM delivery
+requires a signed physical-device test with the app backgrounded or closed. No
+remote-delivery claim may be based solely on a local notification or simulator
+payload. The first executable slice establishes the native shell and synthetic
+behavior proof; live auth/viewers and remote push remain required follow-up slices.
 
 Every executable slice uses the [quality workflow](quality.md). Success requires
 both behavior proof and server-confirmed SonarQube remediation; an unscanned

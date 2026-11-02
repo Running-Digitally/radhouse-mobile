@@ -13,7 +13,7 @@ new-code definitions and every other project.
 The project was created on 2026-11-02 and its Permissions page verified private
 visibility, with no anonymous Browse or See Source Code grant. It follows the
 instance's default new-code definition (Previous version). No analysis,
-quality-gate result or finding closure is claimed at this design-only stage.
+quality-gate result or finding closure is claimed until the first executable main scan has processed.
 
 Use a new project-scoped analysis token. Store it outside Git in macOS Keychain
 or a private process environment. Do not reuse the backend or LifeOS token, place
@@ -50,9 +50,9 @@ vendored code from analysis. Keep native Kotlin/Swift/Objective-C review and
 coverage limitations visible; Jest coverage does not measure native behavior.
 Do not exclude native authentication/transport code to improve percentages.
 
-Adopt reviewed changed-code coverage gates at implementation time (proposed:
-85% executable lines and 80% branches, following the existing mobile workflow),
-without changing the server's quality gate. Test session expiry, cancellation,
+Local Jest gates require 85% lines/statements/functions and 80% branches across
+all first-party TypeScript/JavaScript. They do not change the server's quality
+gate. Test session expiry, cancellation,
 foreign-origin denial, redirect denial, stale responses, reconnect admission and
 attachment ownership. Use simulator/device checks for native secure storage and
 browser login that unit tests cannot establish.
@@ -62,3 +62,21 @@ published main, generate fresh coverage in a disposable checkout, redact output,
 and retain sanitized task/revision/gate/finding receipts. No standing runner or
 scheduled scan is introduced by this plan. A documentation-only bootstrap has
 no meaningful app-code scan; the first executable slice establishes the baseline.
+
+## Local commands and credential setup
+
+`npm run quality` runs TypeScript, ESLint, all Jest behavior tests with LCOV and
+Python scanner-admission tests with coverage. The iOS simulator build is
+`npm run ios:build`; Android uses `./gradlew :app:assembleDebug` in `android`.
+Native builds are separate from the JavaScript and scanner-tooling coverage.
+
+The implemented launcher is `scripts/sonar_scan.py`. Its admission tests require
+clean published main, the expected repository/project and fresh synthetic test
+coverage before retrieving the scanner credential. It never analyzes feature
+source as main. It rechecks remote main before upload and supplies the exact SCM
+revision. Use `python3 scripts/sonar_scan.py --help` for its supported options.
+
+Store the owner-created Project Analysis Token in macOS Keychain as service
+`homelab/sonarqube/radhouse-mobile`, account `radhouse-mobile-analysis`.
+Do not put the value in chat, Git, shell arguments, or a PR. Project registration
+is complete; token provisioning and the first processed main scan remain pending.

@@ -147,3 +147,32 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Native builds and private operational evidence
+.DS_Store
+**/Pods/
+**/build/
+.gradle/
+**/.gradle/
+**/.cxx/
+**/local.properties
+**/xcuserdata/
+**/.xcode.env.local
+.evidence/
+.quality/
+.scannerwork/
+.tools/
+*.xcarchive
+*.ipa
+*.p12
+*.mobileprovision
+__pycache__/
+*.pyc
+/AGENTS.md
+
+# Owner-staged Firebase client configuration and signing
+/ios/RadhouseMobile/GoogleService-Info.plist
+/android/app/google-services.json
+
+.coverage
+/coverage-python.xml

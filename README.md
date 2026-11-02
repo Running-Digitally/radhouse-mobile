@@ -1,8 +1,49 @@
 # Radhouse Mobile
 
-Proposed native iPhone and Android companion for the existing Radhouse assistant.
-This repository is at the design stage; no runnable app or live mobile login is
-implemented yet.
+Native iPhone and Android companion for Radhouse, built with React Native and
+TypeScript. The first executable slice is an explicitly labelled development
+preview with native Chat, Library, Browser, Terminal and Settings screens.
+
+The preview uses synthetic data. Live sign-in, conversation continuity, streaming
+browser, terminal input and remote push delivery are still in development. The
+restricted WebView component and Firebase messaging adapter have boundary tests;
+they are not yet connected to an authenticated backend session.
+
+## Develop
+
+Use Node.js 22.11 or newer and the committed npm lockfile:
+
+```sh
+npm ci
+python3 -m pip install -r requirements-quality.txt
+npm run quality
+```
+
+For iOS, install the Gemfile dependencies and CocoaPods, then open
+`ios/RadhouseMobile.xcworkspace`. `npm run ios:build` produces an ad-hoc signed
+Release simulator app without Metro or Apple distribution credentials. The app
+uses UIKit scenes so it can launch with the iOS 27 SDK.
+
+For Android, configure the Android SDK and JDK 17, then use `npm run android`.
+`cd android && ./gradlew :app:assembleDebug` validates the native debug build.
+Device distribution and production signing are separate from these local builds.
+
+## Push setup
+
+Use separate iOS and Android Firebase registrations for
+`com.runningdigitally.radhouse`. Keep installation-specific client configs in the
+gitignored paths `ios/RadhouseMobile/GoogleService-Info.plist` and
+`android/app/google-services.json`. The preview builds without these files.
+The iOS build checks the configuration's bundle identifier before copying it.
+Never put provider service-account keys or APNs signing keys in the application.
+
+Messaging auto-initialization and automatic iOS registration are disabled.
+The authenticated opt-in flow must call the adapter explicitly. Tests cover
+permission denial, token rotation, revocation failures, stale asynchronous work,
+malformed notifications and authenticated navigation. These tests do not prove
+APNs/FCM delivery. See [push delivery](docs/push-delivery.md) for remaining work.
+
+## Engineering contracts
 
 - [Mobile design and delivery slices](docs/mobile-design.md)
 - [Quality and SonarQube workflow](docs/quality.md)
@@ -12,6 +53,7 @@ The backend owns conversations, pending replies, files, assistant identity and
 runtime operations. Mobile presents those existing contracts. It must not create
 a second assistant history or replay a message just because connectivity changed.
 
-Deployment topology, access policies, credentials and operational evidence belong
-in the private operations repository. Use synthetic fixtures for development and
-keep private conversations, tokens and device screenshots out of Git.
+Keep credentials, deployment topology, private conversations and device evidence
+out of Git. Public tests use synthetic fixtures. Local passing checks do not
+establish a clean SonarQube project: the merged source must be scanned and its
+findings remediated through the documented workflow.

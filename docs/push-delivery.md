@@ -127,3 +127,19 @@ A future backend-only migration should use the dedicated `fid` field before
 Google removes that compatibility. This release needs no server schema or
 privileged deployment change. Physical delivery on both updated apps remains a
 release acceptance check because identifiers change during migration.
+
+
+## iOS registration recovery
+
+Build 5 checks that Firebase holds an APNs device token before requesting its
+Firebase Installation ID. On an existing installation, iOS can report itself
+registered while Firebase has no token in the current process. The native SDK's
+registration helper returns immediately in that state, and Firebase rejects the
+subsequent registration. A physical-device log confirmed this failure in build 4.
+
+When the token is absent, the app performs one bounded APNs unregister/register
+cycle and checks the token again. Healthy registrations remain unchanged. The
+repair observes notification consent and cancellation throughout; missing tokens
+fail before backend admission. Tests cover recovery, healthy registrations,
+continued failure/retry and opt-out during recovery. Physical TestFlight delivery
+must still be accepted on the repaired build; source tests alone do not prove it.

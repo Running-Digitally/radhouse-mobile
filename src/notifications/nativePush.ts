@@ -1,17 +1,16 @@
 import { getApps } from '@react-native-firebase/app';
 import {
-  AuthorizationStatus,
-  deleteToken,
+  unregister,
   registerDeviceForRemoteMessages,
   getInitialNotification,
   getMessaging,
-  getToken,
+  register,
   onMessage,
   onNotificationOpenedApp,
-  onTokenRefresh,
-  requestPermission,
+  onRegistered,
 } from '@react-native-firebase/messaging';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { requestPushPermission } from './permission';
 import { replyNotification, ReplyNotification } from './payload';
 
 export type PushPermission = 'unconfigured' | 'denied' | 'allowed';
@@ -22,10 +21,11 @@ export interface PushRegistration {
 /** Registration callbacks must use the authenticated, owner-bound backend client. */
 export class NativePush {
   private epoch = 0;
-  private subscriptions: (() => void)[] = [];
+  private readonly subscriptions: (() => void)[] = [];
   private updates: Promise<void> = Promise.resolve();
   private cleanups: Promise<void> = Promise.resolve();
   private registration: PushRegistration | null = null;
+  private cancelRegistration: (() => void) | null = null;
 
   configured(): boolean {
     return getApps().length > 0;
@@ -43,18 +43,7 @@ export class NativePush {
       return 'unconfigured';
     }
     const messaging = getMessaging();
-    let allowed: boolean;
-    if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
-      allowed =
-        (await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        )) === PermissionsAndroid.RESULTS.GRANTED;
-    } else {
-      const status = await requestPermission(messaging);
-      allowed =
-        status === AuthorizationStatus.AUTHORIZED ||
-        status === AuthorizationStatus.PROVISIONAL;
-    }
+    const allowed = await requestPushPermission();
     if (!allowed || epoch !== this.epoch) {
       return 'denied';
     }
@@ -65,21 +54,69 @@ export class NativePush {
     if (epoch !== this.epoch) {
       return 'denied';
     }
-    const token = await getToken(messaging);
-    if (epoch !== this.epoch) {
-      return 'denied';
+    try {
+      const ready = await this.registerInstallation(
+        messaging,
+        epoch,
+        registration,
+        onFailure,
+      );
+      return ready && epoch === this.epoch ? 'allowed' : 'denied';
+    } catch (error) {
+      if (epoch === this.epoch) {
+        await this.disable().catch(() => undefined);
+      }
+      throw error;
     }
-    await this.register(token, epoch, registration);
-    if (epoch !== this.epoch) {
-      return 'denied';
-    }
-    this.subscriptions.push(
-      onTokenRefresh(messaging, rotated => {
-        this.register(rotated, epoch, registration).catch(onFailure);
-      }),
-    );
-    return 'allowed';
   }
+
+  private registerInstallation(
+    messaging: ReturnType<typeof getMessaging>,
+    epoch: number,
+    registration: PushRegistration,
+    onFailure: () => void,
+  ): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (ready: boolean, error?: Error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (this.cancelRegistration === cancel) {
+          this.cancelRegistration = null;
+        }
+        if (error) {
+          reject(error);
+        } else {
+          resolve(ready);
+        }
+      };
+      const cancel = () => finish(false);
+      const timer = setTimeout(
+        () => finish(false, new Error('Push registration timed out')),
+        30000,
+      );
+      this.cancelRegistration = cancel;
+      this.subscriptions.push(
+        onRegistered(messaging, fid => {
+          this.register(fid, epoch, registration).then(
+            () => finish(epoch === this.epoch),
+            () => {
+              onFailure();
+              finish(false, new Error('Push registration failed'));
+            },
+          );
+        }),
+      );
+      // Listen first: the SDK may publish its FID before register() resolves.
+      register(messaging).catch(() =>
+        finish(false, new Error('Push registration failed')),
+      );
+    });
+  }
+
   private register(
     token: string,
     epoch: number,
@@ -143,6 +180,7 @@ export class NativePush {
     await this.cleanup();
   }
   private cleanup(): Promise<void> {
+    this.cancelRegistration?.();
     this.subscriptions.splice(0).forEach(stop => stop());
     this.cleanups = this.cleanups
       .catch(() => undefined)
@@ -159,7 +197,7 @@ export class NativePush {
       } finally {
         // Stop provider delivery even when remote cleanup needs a retry.
         if (this.configured()) {
-          await deleteToken(getMessaging());
+          await unregister(getMessaging());
         }
       }
     }

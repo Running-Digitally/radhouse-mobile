@@ -12,8 +12,9 @@ new-code definitions and every other project.
 
 The project was created on 2026-11-02 and its Permissions page verified private
 visibility, with no anonymous Browse or See Source Code grant. It follows the
-instance's default new-code definition (Previous version). No analysis,
-quality-gate result or finding closure is claimed until the first executable main scan has processed.
+instance's default new-code definition (Previous version). The first analysis processed merged main `43677ba0ba3b60598b564f659ddc0658941b8db2`
+on 2026-11-02. Its quality gate passed, with 90.4% coverage, no duplication,
+23 maintainability issues, and zero security issues, reliability issues or hotspots.
 
 Use a new project-scoped analysis token. Store it outside Git in macOS Keychain
 or a private process environment. Do not reuse the backend or LifeOS token, place
@@ -79,24 +80,20 @@ revision. Use `python3 scripts/sonar_scan.py --help` for its supported options.
 Store the owner-created Project Analysis Token in macOS Keychain as service
 `homelab/sonarqube/radhouse-mobile`, account `radhouse-mobile-analysis`.
 Do not put the value in chat, Git, shell arguments, or a PR. Project registration and dedicated Keychain token provisioning are complete;
-the first processed main scan remains pending.
+the first processed main scan is recorded above.
 
-The live-session candidate touches new authentication and viewer code. There is
-still no processed mobile Sonar baseline to inspect; no finding has been
-suppressed or claimed closed. The native bridge requires explicit platform
-review and device qualification in addition to Jest coverage.
+The follow-up remediation replaces deprecated Firebase token/permission APIs,
+extracts native request-admission/response helpers, simplifies UI conditionals,
+and marks immutable members and component props read-only. No issues, rules,
+profiles, quality gates or source coverage have been suppressed or excluded.
+A subsequent exact merged-main scan must confirm closure.
 
-The native-send repair candidate passes 73 Jest tests, 15
-scanner-tooling tests, TypeScript and lint. Coverage is 95.08% lines, 91.01%
-branches and 89.09% functions. Both iOS Release simulator and Android Release
-builds pass, as does the iOS device archive. Regression tests cover composing
-during background refresh, rejecting stale history and following the latest
-message without pulling readers away from older history, and retaining the same
-message identity after a workspace conflict. A synthetic integration check against
-the actual backend handler rejects the omitted workspace header with HTTP409,
-accepts the corrected request with HTTP200, and dispatches only once on retry.
-A live simulator message completed with the repaired native transport. No merged-main mobile
-scan has processed, so these checks do not establish SonarQube closure.
+The remediation candidate passes 86 Jest tests, 15 scanner-tooling tests,
+TypeScript and lint, with 95.30% line coverage. Tests cover Firebase Installation
+ID acknowledgement, rotation, timeout, opt-out races, failed admission and
+platform notification permissions. The existing backend validates the synthetic
+FID and preserves the app-specific APNs topic. This is contract evidence, not a
+replacement for physical delivery verification after updating the app.
 
 The pre-merge review fixed immediate opt-out and overlapping push-cleanup races,
 invalidated the session before waiting for remote notification cleanup on logout,

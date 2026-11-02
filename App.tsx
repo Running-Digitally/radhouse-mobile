@@ -59,7 +59,7 @@ function Workspace() {
         <Text style={appStyles.brand}>radhouse</Text>
         {!connected && <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>}
       </View>
-      {connected ? (
+      {connected && (
         <KeyboardAvoidingView
           style={styles.grow}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -73,7 +73,8 @@ function Workspace() {
             }}
           />
         </KeyboardAvoidingView>
-      ) : preview ? (
+      )}
+      {!connected && preview && (
         <>
           <View style={appStyles.preview}>
             <Text style={styles.small}>Development preview · sample data</Text>
@@ -102,7 +103,8 @@ function Workspace() {
           </KeyboardAvoidingView>
           <TabBar destination={destination} select={setDestination} />
         </>
-      ) : (
+      )}
+      {!connected && !preview && (
         <View style={[styles.page, appStyles.welcome]}>
           <View style={appStyles.mark}>
             <Text style={appStyles.markText}>r.</Text>

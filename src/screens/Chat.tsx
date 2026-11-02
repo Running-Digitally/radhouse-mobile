@@ -6,10 +6,10 @@ import { Turn } from '../workspace';
 export function Chat({
   turns,
   setTurns,
-}: {
+}: Readonly<{
   turns: readonly Turn[];
   setTurns: React.Dispatch<React.SetStateAction<readonly Turn[]>>;
-}) {
+}>) {
   const [text, setText] = useState('');
   function send() {
     const question = text.trim();

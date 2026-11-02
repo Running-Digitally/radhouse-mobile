@@ -78,6 +78,49 @@ function failure(error: unknown): string {
   return 'Connection could not be confirmed. Retry when you are connected.';
 }
 
+const notificationDescriptions: Record<NotificationState, string> = {
+  on: 'Reply notifications are enabled on this device.',
+  unavailable: 'Reply notifications are not available on this connection yet.',
+  error: 'Notification setup could not be confirmed. Retry when connected.',
+  loading: 'Get a private notification when your reply is ready.',
+  off: 'Get a private notification when your reply is ready.',
+};
+function refreshPath(destination: Destination, request: string | null) {
+  if (destination === 'Library') {
+    return '/chat/library';
+  }
+  return request ? '/chat/messages/' + request : '/chat/reply';
+}
+function WorkspaceViewer({
+  destination,
+  info,
+  active,
+}: Readonly<{
+  destination: Destination;
+  info: SessionInfo | null;
+  active: boolean;
+}>) {
+  if (destination !== 'Browser' && destination !== 'Terminal') {
+    return null;
+  }
+  const feature = destination === 'Browser' ? 'browser_streaming' : 'terminal';
+  if (!info?.features[feature]) {
+    return (
+      <Text style={styles.subtitle}>
+        This feature is unavailable on your server.
+      </Text>
+    );
+  }
+  return (
+    <LiveViewer
+      origin={ORIGIN}
+      destination={destination}
+      authenticated
+      foreground={active}
+    />
+  );
+}
+
 export function Connected({
   client,
   leave,
@@ -137,10 +180,10 @@ export function Connected({
       }
       try {
         await action();
-      } catch (caught) {
+      } catch (error_) {
         if (epoch === generation.current) {
-          setError(failure(caught));
-          if (caught instanceof SessionError && caught.kind === 'expired') {
+          setError(failure(error_));
+          if (error_ instanceof SessionError && error_.kind === 'expired') {
             setInfo(null);
             setTurns([]);
             setFiles([]);
@@ -240,11 +283,7 @@ export function Connected({
     const epoch = generation.current;
     const version = ++refreshVersion.current;
     const result = await client.read(
-      destination === 'Library'
-        ? '/chat/library'
-        : notificationRequest
-        ? '/chat/messages/' + notificationRequest
-        : '/chat/reply',
+      refreshPath(destination, notificationRequest),
     );
     if (epoch !== generation.current || version !== refreshVersion.current) {
       return;
@@ -474,22 +513,13 @@ export function Connected({
           <Action title="Cancel sign-in" secondary onPress={signOut} />
         )}
       </View>
-      {step === 'workspace' &&
-        (destination === 'Browser' || destination === 'Terminal') &&
-        (info?.features[
-          destination === 'Browser' ? 'browser_streaming' : 'terminal'
-        ] ? (
-          <LiveViewer
-            origin={ORIGIN}
-            destination={destination}
-            authenticated
-            foreground={active}
-          />
-        ) : (
-          <Text style={styles.subtitle}>
-            This feature is unavailable on your server.
-          </Text>
-        ))}
+      {step === 'workspace' && (
+        <WorkspaceViewer
+          destination={destination}
+          info={info}
+          active={active}
+        />
+      )}
       {step === 'workspace' && destination === 'Chat' && (
         <View style={styles.grow}>
           <ScrollView
@@ -604,13 +634,7 @@ export function Connected({
           <Text style={styles.title}>Your connection.</Text>
           <Text style={styles.body}>Signed in as {info?.username}</Text>
           <Text style={styles.subtitle}>
-            {notificationState === 'on'
-              ? 'Reply notifications are enabled on this device.'
-              : notificationState === 'unavailable'
-              ? 'Reply notifications are not available on this connection yet.'
-              : notificationState === 'error'
-              ? 'Notification setup could not be confirmed. Retry when connected.'
-              : 'Get a private notification when your reply is ready.'}
+            {notificationDescriptions[notificationState]}
           </Text>
           {notifications && notificationState !== 'unavailable' && (
             <Action

@@ -39,10 +39,10 @@ export interface NotificationDestination {
 /** A push is an untrusted hint; an authenticated server read authorizes its target. */
 export class NotificationRouter {
   private epoch = 0;
-  private seen = new Set<string>();
+  private readonly seen = new Set<string>();
   private pending: ReplyNotification | null = null;
   private destination: NotificationDestination | null = null;
-  private checking = new Set<string>();
+  private readonly checking = new Set<string>();
 
   async signIn(destination: NotificationDestination): Promise<void> {
     this.epoch++;

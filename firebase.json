@@ -3,6 +3,7 @@
     "messaging_auto_init_enabled": false,
     "messaging_ios_auto_register_for_remote_messages": false,
     "messaging_ios_foreground_presentation_options": [],
-    "analytics_auto_collection_enabled": false
+    "analytics_auto_collection_enabled": false,
+    "messaging_installation_id_enabled": true
   }
 }

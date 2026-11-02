@@ -107,3 +107,23 @@ notifications. The owner confirmed both physical phones received the alert and
 tapping opened the correct reply. Broader foreground/cold-start, expired-session,
 offline and logout behavior still need device qualification; this successful
 receipt/tap test does not establish every acceptance case above.
+
+## Firebase Installation ID migration
+
+Build 4 opts in with `messaging_installation_id_enabled` in `firebase.json`.
+The SDK generates both native platform flags from this single setting. Automatic
+initialization remains disabled. The app requests notification permission from
+the OS, registers for APNs on iOS, subscribes to `onRegistered`, and then calls
+Firebase `register`. It reports enabled only after the authenticated backend
+acknowledges the FID; timeouts and cancellation invalidate late callbacks.
+Opt-out calls Firebase `unregister`, with server cleanup kept session-bound.
+
+The existing device endpoint's `token` field remains the compatibility transport
+for the FID. Registration replaces the old target at the same app installation
+UUID, preserving saved consent and owner binding. Google's
+[FCM REST contract](https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages)
+explicitly accepts FIDs in the existing `token` target during the transition.
+A future backend-only migration should use the dedicated `fid` field before
+Google removes that compatibility. This release needs no server schema or
+privileged deployment change. Physical delivery on both updated apps remains a
+release acceptance check because identifiers change during migration.

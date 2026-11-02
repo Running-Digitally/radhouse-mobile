@@ -46,21 +46,26 @@ The native app already adopts UIKit scenes for iOS 27. Its icon is rendered from
 the existing Radhouse brand mark; see [the asset source](assets/brand/README.md).
 An archive build is not an uploaded or accepted TestFlight release.
 
-Internal TestFlight **1.0 (1)** from `c139649` was uploaded, processed and assigned
-to the owner's test group on 2026-11-02; Apple reports **Testing**. The owner
-confirmed installation, sign-in and native Chat opening on a physical iPhone.
-The owner also confirmed native Chat on a physical Samsung after installing a
-standalone, bundled Android 1.0 (1) build signed for owner testing. This Android
-build does not require Metro; its signing key is retained privately for updates.
-Android 1.0 (2), from `93aa97e`, is installed on the owner's Samsung. It includes
-the canonical Radhouse launcher icon, including adaptive icon variants, and
-fixes Chat's refresh flicker, initial scroll position and composer placement.
-Background refresh no longer disables the input or blocks sending. The iOS
-simulator confirms that the composer stays visible above the onscreen keyboard
-across refreshes; physical-device acceptance of these fixes remains pending.
-Remote push delivery remains under qualification. The TestFlight upload
-has missing debug-symbol warnings for prebuilt React, ReactNativeDependencies
-and Hermes frameworks, which limit crash symbolication inside those dependencies.
+Build **1.0 (3)** from `4388e2c` is available in the owner's internal TestFlight
+group and single-owner Google Play internal track. Play's imported signing
+certificate matches the installed owner-testing Android build, preserving the
+identity required for an in-place update. This avoids USB debugging, which
+conflicts with the phone's work profile. Physical sign-in retention and sending
+after the store updates await owner acceptance.
+
+The update includes canonical Android launcher icons, stable Chat input during
+background refresh, initial positioning at the latest message, and a composer
+outside scrolling history. Both native transports send the workspace-binding
+header required by browser-enabled servers. The iOS simulator confirms the
+composer stays above the onscreen keyboard across refreshes, and a real message
+completed successfully. The provider accepted two reply notifications; the owner
+confirmed both physical phones received the alert and tapping opened the correct
+reply. Broader push lifecycle behavior remains under qualification.
+
+The TestFlight upload has missing debug-symbol warnings for prebuilt React,
+ReactNativeDependencies and Hermes frameworks, limiting crash symbolication
+inside those dependencies. Signing keys, client configurations and private
+device evidence remain outside Git.
 
 Complete Apple's encryption questionnaire from the actual implementation: the
 app uses platform HTTPS/Keychain and bundled TweetNaCl for encrypted Access-token

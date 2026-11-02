@@ -86,12 +86,16 @@ still no processed mobile Sonar baseline to inspect; no finding has been
 suppressed or claimed closed. The native bridge requires explicit platform
 review and device qualification in addition to Jest coverage.
 
-The chat-stability and Android-icon candidate passes 72 Jest tests, 15
-scanner-tooling tests, TypeScript and lint. Coverage is 95.06% lines, 90.94%
+The native-send repair candidate passes 73 Jest tests, 15
+scanner-tooling tests, TypeScript and lint. Coverage is 95.08% lines, 91.01%
 branches and 89.09% functions. Both iOS Release simulator and Android Release
 builds pass, as does the iOS device archive. Regression tests cover composing
 during background refresh, rejecting stale history and following the latest
-message without pulling readers away from older history. No merged-main mobile
+message without pulling readers away from older history, and retaining the same
+message identity after a workspace conflict. A synthetic integration check against
+the actual backend handler rejects the omitted workspace header with HTTP409,
+accepts the corrected request with HTTP200, and dispatches only once on retry.
+A live simulator message completed with the repaired native transport. No merged-main mobile
 scan has processed, so these checks do not establish SonarQube closure.
 
 The production dependency audit currently reports 24 affected package entries

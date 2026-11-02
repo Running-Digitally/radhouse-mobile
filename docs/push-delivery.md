@@ -95,12 +95,15 @@ ownership before loading the corresponding turn. Sign-out attempts device
 unregistration and provider token deletion, then revokes the server session.
 Offline revocation cannot be guaranteed and must remain visible to the user.
 
-Local validation on 2 November: 70 Jest behavior tests and 15 scanner-tooling
+Local validation on 2 November: 73 Jest behavior tests and 15 scanner-tooling
 tests passed, as did TypeScript, lint, coverage gates, iOS Release simulator and
-Android debug builds. Permission denial, persistence, account changes, token
+Android Release builds. Permission denial, persistence, account changes, token
 rotation, cleanup failures and stale asynchronous operations have synthetic
 coverage. Physical iPhone and Samsung installation, sign-in and native Chat have
 owner acceptance. Provider credentials are configured and authenticated FCM
-validation passed through the restricted sender network path. Signed-device
-notification receipt and cold-start/background behavior remain release
-prerequisites; provider validation alone does not prove them.
+validation passed through the restricted sender network path. After the native
+workspace-header repair, a real message completed and the provider accepted two
+notifications. The owner confirmed both physical phones received the alert and
+tapping opened the correct reply. Broader foreground/cold-start, expired-session,
+offline and logout behavior still need device qualification; this successful
+receipt/tap test does not establish every acceptance case above.

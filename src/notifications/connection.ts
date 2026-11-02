@@ -24,7 +24,7 @@ export class NotificationConnection {
   private epoch = 0;
   private preference: Preference | null = null;
   private writes: Promise<unknown> = Promise.resolve();
-  private router = new NotificationRouter();
+  private readonly router = new NotificationRouter();
   private stop: (() => void) | null = null;
   private listener: Listener | null = null;
   private username = '';

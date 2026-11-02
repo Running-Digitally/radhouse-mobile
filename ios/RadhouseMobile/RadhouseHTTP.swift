@@ -2,6 +2,7 @@ import Foundation
 import React
 import Security
 import WebKit
+import UserNotifications
 
 private let appHost = "radhouse.sati.sh"
 private let appOrigin = "https://radhouse.sati.sh"
@@ -11,6 +12,18 @@ class RadhouseHTTP: NSObject {
   @objc static func requiresMainQueueSetup() -> Bool { false }
   // One native workspace binding for this bridge lifetime; retries keep the same binding.
   private let workspaceTab = UUID().uuidString.lowercased()
+
+  @objc(requestNotificationPermission:rejecter:)
+  func requestNotificationPermission(_ resolve: @escaping RCTPromiseResolveBlock,
+                                     reject: @escaping RCTPromiseRejectBlock) {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { allowed, error in
+      if error != nil {
+        reject("permission_failed", "Notification permission unavailable", nil)
+      } else {
+        resolve(allowed)
+      }
+    }
+  }
 
   @objc(randomBytes:rejecter:)
   func randomBytes(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {

@@ -32,18 +32,26 @@ class RadhouseHTTP(context: ReactApplicationContext) : ReactContextBaseJavaModul
     finally { bytes.fill(0) }
   }
   private fun safe(value: String, limit: Int) = value.length <= limit && value.none { it == '\r' || it == '\n' || it == ';' }
+  private fun allowedDestination(url: HttpUrl?, method: String, access: String,
+                                 local: String, csrf: String, body: String): Boolean {
+    if (url == null || !url.isHttps || url.port != 443 || url.username.isNotEmpty() ||
+      url.password.isNotEmpty() || url.fragment != null) return false
+    if (url.host == APP_HOST) return true
+    return url.host == "login.cloudflareaccess.org" && url.encodedPath.startsWith("/transfer/") &&
+      url.query == null && method == "GET" && access.isEmpty() && local.isEmpty() &&
+      csrf.isEmpty() && body.isEmpty()
+  }
   @ReactMethod fun request(raw: String, method: String, access: String, local: String,
                            csrf: String, body: String, promise: Promise) {
     val url = raw.toHttpUrlOrNull()
-    val app = url?.host == APP_HOST
-    val relay = url?.host == "login.cloudflareaccess.org" && url.encodedPath.startsWith("/transfer/") &&
-      url.query == null && method == "GET" && access.isEmpty() && local.isEmpty() && csrf.isEmpty() && body.isEmpty()
-    if (url == null || !url.isHttps || url.port != 443 || url.username.isNotEmpty() ||
-      url.password.isNotEmpty() || url.fragment != null || !(app || relay) || method !in listOf("GET","POST","PUT","DELETE") ||
-      !safe(access,16384) || !safe(local,200) || !safe(csrf,200) || body.toByteArray().size > 262144) {
+    if (!allowedDestination(url, method, access, local, csrf, body) ||
+      method !in listOf("GET","POST","PUT","DELETE") || !safe(access,16384) ||
+      !safe(local,200) || !safe(csrf,200) || body.toByteArray().size > 262144) {
       promise.reject("denied","Request not allowed"); return
     }
-    val request = Request.Builder().url(url).header("Accept","application/json")
+    val admittedURL = requireNotNull(url)
+    val app = admittedURL.host == APP_HOST
+    val request = Request.Builder().url(admittedURL).header("Accept","application/json")
     if (app) {
       request.header("cf-access-token",access).header("Origin",ORIGIN)
       request.header("X-Radhouse-Browser-Tab",workspaceTab)
@@ -56,20 +64,29 @@ class RadhouseHTTP(context: ReactApplicationContext) : ReactContextBaseJavaModul
       override fun onResponse(call: Call, response: Response) {
         response.use {
           try {
-            val source = it.body?.source() ?: throw IOException()
-            if (source.request(4194305)) throw IOException()
-            val result = Arguments.createMap()
-            result.putInt("status",it.code); result.putString("body",source.readUtf8())
-            result.putString("serviceKey",it.header("service-public-key") ?: "")
-            result.putString("contentType",it.header("Content-Type") ?: "")
-            val token = if (app && url.encodedPath == "/auth/login" && it.code == 200)
-              Cookie.parseAll(url,it.headers).firstOrNull { c -> c.name == "radhouse_session" &&
-                c.domain == APP_HOST && c.path == "/" && c.secure && c.httpOnly && c.hostOnly }?.value ?: "" else ""
-            result.putString("sessionToken",token); promise.resolve(result)
+            promise.resolve(responseData(it, admittedURL))
           } catch (_: Exception) { promise.reject("network_failed","Could not complete secure request") }
         }
       }
     })
+  }
+  private fun responseData(response: Response, url: HttpUrl): WritableMap {
+    val source = response.body?.source() ?: throw IOException()
+    if (source.request(4194305)) throw IOException()
+    val result = Arguments.createMap()
+    result.putInt("status",response.code)
+    result.putString("body",source.readUtf8())
+    result.putString("serviceKey",response.header("service-public-key") ?: "")
+    result.putString("contentType",response.header("Content-Type") ?: "")
+    result.putString("sessionToken",sessionToken(response,url))
+    return result
+  }
+  private fun sessionToken(response: Response, url: HttpUrl): String {
+    if (url.host != APP_HOST || url.encodedPath != "/auth/login" || response.code != 200) return ""
+    return Cookie.parseAll(url,response.headers).firstOrNull { cookie ->
+      cookie.name == "radhouse_session" && cookie.domain == APP_HOST && cookie.path == "/" &&
+        cookie.secure && cookie.httpOnly && cookie.hostOnly
+    }?.value ?: ""
   }
   @ReactMethod fun syncCookies(access: String, local: String, promise: Promise) {
     if (access.isEmpty() || local.isEmpty() || !safe(access,16384) || !safe(local,200)) {

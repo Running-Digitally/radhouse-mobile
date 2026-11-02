@@ -1,7 +1,8 @@
 # Push delivery contract
 
-Status: authenticated mobile integration and matching backend candidate
-implemented; deployment and real-device delivery pending. Owner choice,
+Status: authenticated mobile integration implemented; matching backend deployed
+and provider validation passed on 2 November 2026. Physical notification receipt
+and tap behavior remain pending acceptance. Owner choice,
 2 November 2026: reuse the existing Apple developer team
 and Firebase project, with separate Radhouse application registrations. Keep
 provider identifiers, credentials and deployment evidence in private operations
@@ -26,7 +27,7 @@ work and duplicate events at the session boundary.
 
 ## Backend integration
 
-These routes are implemented in the separate backend candidate, not yet deployed:
+These routes are implemented in the deployed backend:
 
 - `GET /chat/push/status` reports availability only when push is configured.
   A missing route is shown as unavailable; authentication errors are not hidden.
@@ -98,5 +99,8 @@ Local validation on 2 November: 70 Jest behavior tests and 15 scanner-tooling
 tests passed, as did TypeScript, lint, coverage gates, iOS Release simulator and
 Android debug builds. Permission denial, persistence, account changes, token
 rotation, cleanup failures and stale asynchronous operations have synthetic
-coverage. Signed-device delivery, cold-start/background behavior and live
-provider configuration remain release prerequisites.
+coverage. Physical iPhone and Samsung installation, sign-in and native Chat have
+owner acceptance. Provider credentials are configured and authenticated FCM
+validation passed through the restricted sender network path. Signed-device
+notification receipt and cold-start/background behavior remain release
+prerequisites; provider validation alone does not prove them.

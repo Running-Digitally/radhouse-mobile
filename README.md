@@ -10,11 +10,12 @@ and Library reads, explicit message submission, and authenticated Browser and
 Terminal viewers. Native sign-in, saved-session restoration and Terminal opening
 have been qualified in the iOS simulator. Browser opening currently encounters a
 shared server conflict also reproduced in the web app. Library downloads/uploads
-and remote push delivery remain in development.
+remain in development. Physical notification delivery is under qualification.
 
 The Firebase messaging adapter is connected to authenticated registration and
-notification controls. The matching backend outbox is a separate, undeployed
-candidate; the app reports notifications unavailable until configured. Do not
+notification controls. The matching backend outbox was deployed on 2026-11-02
+with provider validation and authentication-boundary checks passing. Physical
+notification receipt and tap behavior still require device acceptance. Do not
 treat the sample notification button or a successful native build as evidence of
 APNs/FCM delivery.
 
@@ -48,7 +49,10 @@ An archive build is not an uploaded or accepted TestFlight release.
 Internal TestFlight **1.0 (1)** from `c139649` was uploaded, processed and assigned
 to the owner's test group on 2026-11-02; Apple reports **Testing**. The owner
 confirmed installation, sign-in and native Chat opening on a physical iPhone.
-Remote push delivery remains pending. The upload
+The owner also confirmed native Chat on a physical Samsung after installing a
+standalone, bundled Android 1.0 (1) build signed for owner testing. This Android
+build does not require Metro; its signing key is retained privately for updates.
+Remote push delivery remains under qualification. The TestFlight upload
 has missing debug-symbol warnings for prebuilt React, ReactNativeDependencies
 and Hermes frameworks, which limit crash symbolication inside those dependencies.
 

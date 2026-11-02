@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  AppState,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SessionClient } from '../auth/client';
 import { SessionError, SessionInfo } from '../auth/types';
 import {
@@ -10,7 +17,7 @@ import { ORIGIN, object } from '../auth/transfer';
 import { TabBar } from '../components/TabBar';
 import { LiveViewer } from '../components/LiveViewer';
 import { Action } from '../components/Action';
-import { styles } from '../theme';
+import { colors, styles } from '../theme';
 import { Destination } from '../workspace';
 
 type LiveTurn = {
@@ -102,18 +109,28 @@ export function Connected({
   const [replyReady, setReplyReady] = useState(false);
   const [active, setActive] = useState(AppState.currentState === 'active');
   const busyRef = useRef(false);
+  const pollingRef = useRef(false);
+  const refreshVersion = useRef(0);
+  const conversation = useRef<ScrollView>(null);
+  const followingLatest = useRef(true);
   const generation = useRef(0);
   const activeRef = useRef(active);
 
   const run = useCallback(
-    async (action: () => Promise<void>) => {
-      if (busyRef.current) {
+    async (action: () => Promise<void>, quiet = false) => {
+      if (busyRef.current || (quiet && pollingRef.current)) {
         return;
       }
       const epoch = generation.current;
-      busyRef.current = true;
-      setBusy(true);
-      setError('');
+      if (quiet) {
+        pollingRef.current = true;
+      } else {
+        // An explicit action takes priority over an older background read.
+        refreshVersion.current++;
+        busyRef.current = true;
+        setBusy(true);
+        setError('');
+      }
       try {
         await action();
       } catch (caught) {
@@ -134,8 +151,12 @@ export function Connected({
         }
       } finally {
         if (epoch === generation.current) {
-          busyRef.current = false;
-          setBusy(false);
+          if (quiet) {
+            pollingRef.current = false;
+          } else {
+            busyRef.current = false;
+            setBusy(false);
+          }
         }
       }
     },
@@ -211,6 +232,7 @@ export function Connected({
 
   const refresh = useCallback(async () => {
     const epoch = generation.current;
+    const version = ++refreshVersion.current;
     const result = await client.read(
       destination === 'Library'
         ? '/chat/library'
@@ -218,7 +240,7 @@ export function Connected({
         ? '/chat/messages/' + notificationRequest
         : '/chat/reply',
     );
-    if (epoch !== generation.current) {
+    if (epoch !== generation.current || version !== refreshVersion.current) {
       return;
     }
     if (destination === 'Library') {
@@ -250,7 +272,7 @@ export function Connected({
     run(revalidate);
     const timer = setInterval(() => {
       if (activeRef.current && destination === 'Chat') {
-        run(refresh);
+        run(refresh, true);
       }
     }, 5000);
     return () => clearInterval(timer);
@@ -259,6 +281,7 @@ export function Connected({
   async function signOut() {
     generation.current++;
     busyRef.current = false;
+    pollingRef.current = false;
     setBusy(false);
     setInfo(null);
     setTurns([]);
@@ -308,6 +331,7 @@ export function Connected({
       return;
     }
     setPending(frozen);
+    followingLatest.current = true;
     // Every explicit retry uses the same request ID and frozen text. Never auto-resubmit.
     await client.send(frozen.id, frozen.text);
     if (epoch !== generation.current) {
@@ -443,64 +467,94 @@ export function Connected({
           </Text>
         ))}
       {step === 'workspace' && destination === 'Chat' && (
-        <ScrollView
-          contentContainerStyle={styles.page}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={styles.title}>Your conversation.</Text>
-          {replyReady && (
-            <Text style={styles.small}>A Radhouse reply is ready.</Text>
-          )}
-          {notificationRequest && (
+        <View style={styles.grow}>
+          <ScrollView
+            ref={conversation}
+            testID="conversation-history"
+            style={styles.grow}
+            contentContainerStyle={styles.page}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            scrollEventThrottle={16}
+            onScroll={({ nativeEvent }) => {
+              const { contentOffset, contentSize, layoutMeasurement } =
+                nativeEvent;
+              followingLatest.current =
+                contentSize.height -
+                  contentOffset.y -
+                  layoutMeasurement.height <
+                80;
+            }}
+            onLayout={() => {
+              if (followingLatest.current) {
+                conversation.current?.scrollToEnd({ animated: false });
+              }
+            }}
+            onContentSizeChange={() => {
+              if (followingLatest.current) {
+                conversation.current?.scrollToEnd({ animated: false });
+              }
+            }}
+          >
+            <Text style={styles.title}>Your conversation.</Text>
+            {replyReady && (
+              <Text style={styles.small}>A Radhouse reply is ready.</Text>
+            )}
+            {notificationRequest && (
+              <Action
+                title="Back to current conversation"
+                secondary
+                onPress={() => {
+                  setNotificationRequest(null);
+                  setReplyReady(false);
+                }}
+              />
+            )}
+            {turns.map(turn => (
+              <View key={turn.request_id} style={styles.card}>
+                <Text style={styles.eyebrow}>YOU</Text>
+                <Text style={styles.body}>{turn.text}</Text>
+                <Text style={styles.small}>{turn.status}</Text>
+                {turn.output ? (
+                  <Text selectable style={styles.body}>
+                    {turn.output}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
             <Action
-              title="Back to current conversation"
+              title="Refresh conversation"
               secondary
-              onPress={() => {
-                setNotificationRequest(null);
-                setReplyReady(false);
-              }}
+              disabled={busy}
+              onPress={() => run(refresh)}
             />
-          )}
-          {turns.map(turn => (
-            <View key={turn.request_id} style={styles.card}>
-              <Text style={styles.eyebrow}>YOU</Text>
-              <Text style={styles.body}>{turn.text}</Text>
-              <Text style={styles.small}>{turn.status}</Text>
-              {turn.output ? (
-                <Text selectable style={styles.body}>
-                  {turn.output}
-                </Text>
-              ) : null}
+          </ScrollView>
+          <View testID="conversation-composer" style={chatStyles.composer}>
+            <View style={styles.row}>
+              <TextInput
+                accessibilityLabel="Message Radhouse"
+                value={pending?.text ?? text}
+                editable={!pending}
+                onChangeText={setText}
+                multiline
+                maxLength={16000}
+                style={[styles.input, chatStyles.input]}
+                placeholder="What’s on your mind?"
+              />
+              <Action
+                title={pending ? 'Retry same message' : 'Send message'}
+                disabled={busy || !(pending || text.trim())}
+                onPress={() => run(send)}
+              />
             </View>
-          ))}
-          <TextInput
-            accessibilityLabel="Message Radhouse"
-            value={pending?.text ?? text}
-            editable={!pending && !busy}
-            onChangeText={setText}
-            multiline
-            maxLength={16000}
-            style={styles.input}
-            placeholder="What’s on your mind?"
-          />
-          {pending && (
-            <Text style={styles.small}>
-              Submission is unconfirmed. Retry sends the same message
-              identifier, so a lost response cannot create a second message.
-            </Text>
-          )}
-          <Action
-            title={pending ? 'Retry same message' : 'Send message'}
-            disabled={busy || !(pending || text.trim())}
-            onPress={() => run(send)}
-          />
-          <Action
-            title="Refresh conversation"
-            secondary
-            disabled={busy}
-            onPress={() => run(refresh)}
-          />
-        </ScrollView>
+            {pending && (
+              <Text style={styles.small}>
+                Submission is unconfirmed. Retry sends the same message
+                identifier, so a lost response cannot create a second message.
+              </Text>
+            )}
+          </View>
+        </View>
       )}
       {step === 'workspace' && destination === 'Library' && (
         <ScrollView contentContainerStyle={styles.page}>
@@ -556,7 +610,9 @@ export function Connected({
               title="Turn off reply notifications"
               secondary
               onPress={() => {
-                notifications.disable().catch(() => setNotificationState('error'));
+                notifications
+                  .disable()
+                  .catch(() => setNotificationState('error'));
               }}
             />
           )}
@@ -573,3 +629,15 @@ export function Connected({
     </View>
   );
 }
+
+const chatStyles = StyleSheet.create({
+  composer: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    backgroundColor: colors.paper,
+  },
+  input: { flex: 1, maxHeight: 120, textAlignVertical: 'top' },
+});

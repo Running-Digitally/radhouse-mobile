@@ -1,6 +1,12 @@
 import React from 'react';
-import { AppState } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AppState, ScrollView } from 'react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
 import { Connected, readTurns } from '../src/screens/Connected';
 import { SessionClient } from '../src/auth/client';
 import { SessionError } from '../src/auth/types';
@@ -89,7 +95,9 @@ test('notification controls preserve consent, verify a tapped target, and revoke
   notifications.disable.mockRejectedValueOnce(new Error('provider offline'));
   fireEvent.press(f.ui.getByText('Turn off reply notifications'));
   await waitFor(() =>
-    expect(f.ui.getByText(/Notification setup could not be confirmed/)).toBeTruthy(),
+    expect(
+      f.ui.getByText(/Notification setup could not be confirmed/),
+    ).toBeTruthy(),
   );
   fireEvent.press(f.ui.getByText('Turn off reply notifications'));
   await waitFor(() =>
@@ -257,4 +265,85 @@ test('malformed history never renders unchecked content', () => {
   expect(() => readTurns({})).toThrow('invalid');
   expect(() => readTurns([{}])).toThrow('invalid');
   expect(readTurns([{ ...turn, output: null }])[0].output).toBeNull();
+});
+
+test('background polling keeps the composer editable and does not block Send or overwrite a newer reply', async () => {
+  jest.useFakeTimers();
+  const f = fixture(info);
+  await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
+  await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
+  let finishPoll!: () => void;
+  f.client.read.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        finishPoll = () => resolve({ turns: [turn] });
+      }),
+  );
+  const input = f.ui.getByLabelText('Message Radhouse');
+  fireEvent.changeText(input, 'Typing through the refresh');
+  try {
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+    expect(f.ui.queryByText('Connecting…')).toBeNull();
+    expect(f.ui.getByLabelText('Message Radhouse')).toBe(input);
+    expect(input.props.editable).toBe(true);
+    expect(input.props.value).toBe('Typing through the refresh');
+    f.client.read.mockResolvedValueOnce({
+      turns: [{ ...turn, output: 'New reply after send' }],
+    });
+    await act(async () => {
+      fireEvent.press(f.ui.getByText('Send message'));
+    });
+    expect(f.client.send).toHaveBeenCalledWith(
+      turn.request_id,
+      'Typing through the refresh',
+    );
+    expect(f.ui.getByText('New reply after send')).toBeTruthy();
+    await act(async () => finishPoll());
+    expect(f.ui.getByText('New reply after send')).toBeTruthy();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test('history opens at the bottom, preserves reading position, and keeps the composer outside scrolling content', async () => {
+  const scroll = jest
+    .spyOn(ScrollView.prototype, 'scrollToEnd')
+    .mockImplementation(() => undefined);
+  try {
+    const f = fixture(info);
+    await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
+    const history = f.ui.getByTestId('conversation-history');
+    expect(within(history).queryByLabelText('Message Radhouse')).toBeNull();
+    expect(
+      within(f.ui.getByTestId('conversation-composer')).getByLabelText(
+        'Message Radhouse',
+      ),
+    ).toBeTruthy();
+    fireEvent(history, 'contentSizeChange', 360, 4000);
+    expect(scroll).toHaveBeenCalledWith({ animated: false });
+    scroll.mockClear();
+    fireEvent.scroll(history, {
+      nativeEvent: {
+        contentOffset: { y: 500 },
+        contentSize: { height: 4000 },
+        layoutMeasurement: { height: 600 },
+      },
+    });
+    fireEvent(history, 'contentSizeChange', 360, 4200);
+    fireEvent(history, 'layout', { nativeEvent: { layout: { height: 300 } } });
+    expect(scroll).not.toHaveBeenCalled();
+    fireEvent.scroll(history, {
+      nativeEvent: {
+        contentOffset: { y: 3900 },
+        contentSize: { height: 4200 },
+        layoutMeasurement: { height: 300 },
+      },
+    });
+    fireEvent(history, 'contentSizeChange', 360, 4300);
+    expect(scroll).toHaveBeenCalledWith({ animated: false });
+  } finally {
+    scroll.mockRestore();
+  }
 });

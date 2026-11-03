@@ -116,3 +116,15 @@ minimatch remediation requires a breaking API migration in its parent tools.
 Do not use untrusted CLI configuration or glob patterns. Track compatibility
 qualification separately; these are dependency limitations, not Sonar findings,
 and have not been suppressed.
+
+The native-browser follow-up analyzed merged main
+`f004ce64cecb3ba2ab692f650ef88b6c44c78a39` on 2026-11-03. New-code coverage (90.0%)
+and duplication (0.0%) passed; three maintainability findings failed the gate.
+They were `123cea81-9d96-463a-9d6e-beb8114f4072` (browser component complexity),
+`b0d21902-00fa-4830-b7c3-98ad4682864b` (optional chaining), and
+`cfe86e6a-0d84-4c6c-a4a3-049660adde32` (connected-screen complexity). The earlier
+research-control nested ternary closed. The bounded follow-up extracts native
+header/connection rendering and the browser-destination predicate; it preserves
+state, commands and control boundaries. Typecheck, lint, 161 application tests,
+coverage thresholds and 15 tooling tests pass. Server closure and the final gate
+must be confirmed by the next exact-main analysis, not inferred from this edit.

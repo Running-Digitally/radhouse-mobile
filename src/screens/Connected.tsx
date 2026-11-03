@@ -35,6 +35,14 @@ import { Destination } from '../workspace';
 
 type LiveFile = { id: string; name: string; kind: string };
 const browserStyles = StyleSheet.create({ hidden: { display: 'none' } });
+function browserDestination(
+  destination: Destination,
+  commitmentsOpen: boolean,
+) {
+  return (
+    destination === 'Browser' || (destination === 'Chat' && !commitmentsOpen)
+  );
+}
 function readFiles(value: unknown): LiveFile[] {
   if (!Array.isArray(value) || value.length > 100) {
     throw new SessionError('invalid');
@@ -750,8 +758,7 @@ export function Connected({
         verified &&
         info?.features.browser_streaming &&
         browserTab &&
-        (destination === 'Browser' ||
-          (destination === 'Chat' && !commitmentsOpen)) && (
+        browserDestination(destination, commitmentsOpen) && (
           <NativeBrowser
             origin={ORIGIN}
             tab={browserTab}

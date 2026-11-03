@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { SessionClient } from '../auth/client';
+import {
+  CommitmentFollowup,
+  Followup,
+  readFollowup,
+} from './CommitmentFollowup';
 import { Action } from './Action';
 import { styles } from '../theme';
 
@@ -12,12 +17,14 @@ type Item = {
   reason: string;
   preparation: string;
   state: string;
+  followup: Followup | null;
 };
 type ReviewState = {
   active: boolean;
+  followupsSupported: boolean;
   suggestions: Item[];
   coverage: { checked_at: number; outcome: string } | null;
-  last_review?: { state: string } | null;
+  last_review?: { state: string; error?: string | null } | null;
 };
 function readState(raw: Record<string, unknown>): ReviewState {
   if (
@@ -41,7 +48,7 @@ function readState(raw: Record<string, unknown>): ReviewState {
       ].every(key => typeof value[key] === 'string')
     )
       throw new Error('invalid');
-    return value as Item;
+    return { ...value, followup: readFollowup(value.followup) } as Item;
   });
   const coverage = raw.coverage as ReviewState['coverage'];
   if (
@@ -52,7 +59,14 @@ function readState(raw: Record<string, unknown>): ReviewState {
     throw new Error('invalid');
   const last = raw.last_review as ReviewState['last_review'];
   if (last && typeof last.state !== 'string') throw new Error('invalid');
-  return { active: raw.active, suggestions, coverage, last_review: last };
+  const scope = raw.scope as { followups_supported?: unknown } | undefined;
+  return {
+    active: raw.active,
+    followupsSupported: scope?.followups_supported === true,
+    suggestions,
+    coverage,
+    last_review: last,
+  };
 }
 
 export function Commitments({
@@ -108,9 +122,9 @@ export function Commitments({
     value?.active &&
     (!value.coverage || Date.now() / 1000 - value.coverage.checked_at > 7200);
   const outcomes: Record<string, string> = {
-    quiet: 'Checked; nothing new to suggest.',
+    quiet: 'Checked; nothing needs your attention.',
     unchanged: 'No new conversation to review.',
-    ready: 'Suggestions prepared.',
+    ready: 'Suggestions or follow-up preparation ready.',
     running: 'Review in progress.',
     failed: 'The last review failed.',
     interrupted: 'The last review was interrupted.',
@@ -123,7 +137,10 @@ export function Commitments({
       ? 'budget_wait'
       : value?.last_review?.state ?? value?.coverage?.outcome ?? '';
   let coverageMessage = 'No completed review yet.';
-  if (stale) {
+  if (value?.last_review?.error === 'review_evidence_too_large') {
+    coverageMessage =
+      'Review input exceeded the size limit; shorten progress notes.';
+  } else if (stale) {
     coverageMessage = 'Recent coverage has not been established.';
   } else if (value?.coverage) {
     coverageMessage =
@@ -137,10 +154,12 @@ export function Commitments({
   return (
     <View style={styles.card}>
       <Text style={styles.eyebrow}>STANDING RESPONSIBILITY</Text>
-      <Text style={styles.title}>Commitment suggestions</Text>
+      <Text style={styles.title}>Commitments and follow-up</Text>
       <Text style={styles.body}>
-        Radhouse may review up to 30 recent exchanges from the last seven days,
-        up to four times per day, and prepare a suggested next step.
+        Radhouse may review saved commitments and your progress notes, plus up
+        to 30 recent exchanges from the last seven days, up to four times per
+        day, and prepare useful next steps. Activated commitments stay under
+        review with progress check-ins, snooze and completion controls.
       </Text>
       <Text style={styles.small}>
         Attachments, Library, browser, other conversations and external actions
@@ -157,7 +176,7 @@ export function Commitments({
             {value.active ? 'Permission enabled.' : 'Paused.'} {coverageMessage}
           </Text>
           <Action
-            title={value.active ? 'Pause suggestions' : 'Enable suggestions'}
+            title={value.active ? 'Pause reviews' : 'Resume reviews'}
             disabled={busy}
             onPress={() =>
               change(() => client.commitmentControl(!value.active))
@@ -192,14 +211,26 @@ export function Commitments({
           {item.state === 'suggested' ? (
             <>
               <Text style={styles.small}>
-                Confirmation saves this commitment. It does not schedule
-                follow-ups or authorize external actions.
+                {value?.followupsSupported
+                  ? 'Confirmation starts private ongoing review. Radhouse can prepare next steps and ask about progress; you control snooze, completion and stop. No external action is authorized.'
+                  : 'Confirmation saves this commitment. Ongoing follow-up is not available on this server.'}
               </Text>
               <Action
-                title="Confirm commitment"
-                disabled={busy}
+                title={
+                  value?.followupsSupported
+                    ? 'Confirm and follow up'
+                    : 'Confirm commitment'
+                }
+                disabled={busy || !value?.active}
                 onPress={() =>
-                  change(() => client.commitmentDecision(item.id, 'confirmed'))
+                  change(() =>
+                    client.commitmentDecision(
+                      item.id,
+                      value?.followupsSupported
+                        ? 'confirmed_followup'
+                        : 'confirmed',
+                    ),
+                  )
                 }
               />
               <Action
@@ -211,6 +242,34 @@ export function Commitments({
                 }
               />
             </>
+          ) : null}
+          {item.state === 'confirmed' &&
+          !item.followup &&
+          value?.followupsSupported ? (
+            <>
+              <Text style={styles.small}>
+                Saved only. Ongoing follow-up has not been started.
+              </Text>
+              <Action
+                title="Start follow-up"
+                disabled={busy || !value.active}
+                onPress={() =>
+                  change(() =>
+                    client.commitmentDecision(item.id, 'confirmed_followup'),
+                  )
+                }
+              />
+            </>
+          ) : null}
+          {item.followup ? (
+            <CommitmentFollowup
+              value={item.followup}
+              active={value?.active === true}
+              busy={busy}
+              onChange={action =>
+                change(() => client.commitmentFollowup(item.id, action))
+              }
+            />
           ) : null}
         </View>
       ))}

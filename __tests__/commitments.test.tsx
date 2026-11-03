@@ -106,3 +106,104 @@ test('commitment screen shows evidence and waits for an explicit decision', asyn
   );
   await waitFor(() => expect(ui.getByText('CONFIRMED')).toBeTruthy());
 });
+
+test('later follow-up occurrences open the same authenticated commitment independently', async () => {
+  const router = new NotificationRouter();
+  const openCommitment = jest.fn();
+  await router.signIn({
+    ownsRequest: async () => false,
+    openRequest: jest.fn(),
+    ownsCommitment: async () => true,
+    openCommitment,
+  });
+  expect(await router.receive(event)).toBe(true);
+  expect(
+    await router.receive({
+      ...event,
+      event_id: 'c7ea6f4e-612f-46e2-849e-135b45cb24c7',
+    }),
+  ).toBe(true);
+  expect(openCommitment.mock.calls).toEqual([[id], [id]]);
+});
+
+test('explicit follow-up confirmation exposes progress, snooze and terminal controls', async () => {
+  const followup = {
+    state: 'active',
+    revision: 1,
+    next_review_at: 1000000,
+    last_review_at: null,
+    progress: '',
+    latest_note: null,
+  };
+  const item = {
+    id,
+    source_request_id: id,
+    title: 'Prepare the draft',
+    quote: 'send the draft',
+    reason: 'A possible intention.',
+    preparation: 'Review the draft first.',
+    state: 'suggested',
+    followup: null as typeof followup | null,
+  };
+  const client = {
+    read: jest.fn(async () => ({
+      active: true,
+      scope: { followups_supported: true },
+      suggestions: [item],
+      coverage: null,
+    })),
+    commitmentDecision: jest.fn(async () => {
+      item.state = 'confirmed';
+      item.followup = { ...followup };
+    }),
+    commitmentFollowup: jest.fn(
+      async (
+        _id: string,
+        body: { action: string; revision: number; progress?: string },
+      ) => {
+        if (body.action === 'progress')
+          item.followup!.progress = body.progress!;
+        if (body.action === 'snooze') item.followup!.state = 'snoozed';
+        if (body.action === 'complete') item.followup!.state = 'completed';
+        item.followup = { ...item.followup!, revision: body.revision + 1 };
+      },
+    ),
+    commitmentControl: jest.fn(),
+  };
+  const ui = await renderAsync(
+    <Commitments
+      client={client as unknown as SessionClient}
+      focusId={id}
+      onClose={jest.fn()}
+      onSource={jest.fn()}
+    />,
+  );
+  fireEvent.press(ui.getByText('Confirm and follow up'));
+  await waitFor(() =>
+    expect(client.commitmentDecision).toHaveBeenCalledWith(
+      id,
+      'confirmed_followup',
+    ),
+  );
+  await waitFor(() => expect(ui.getByText('Ongoing follow-up')).toBeTruthy());
+  fireEvent.changeText(
+    ui.getByLabelText('Progress or a correction'),
+    'Opening paragraph finished.',
+  );
+  fireEvent.press(ui.getByText('Save progress'));
+  await waitFor(() =>
+    expect(client.commitmentFollowup).toHaveBeenCalledWith(id, {
+      action: 'progress',
+      revision: 1,
+      progress: 'Opening paragraph finished.',
+    }),
+  );
+  await waitFor(() =>
+    expect(ui.getByText('Save progress').parent).toBeTruthy(),
+  );
+  fireEvent.press(ui.getByText('Snooze 1 day'));
+  await waitFor(() => expect(ui.getByText('Resume now')).toBeTruthy());
+  fireEvent.press(ui.getByText('Mark complete'));
+  await waitFor(() => expect(ui.getByText('COMPLETED')).toBeTruthy());
+  expect(ui.queryByText('Save progress')).toBeNull();
+});

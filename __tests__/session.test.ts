@@ -84,6 +84,44 @@ function fixture() {
   };
   return { io, client, login };
 }
+test.each([
+  ['inference_selection_invalid', 422],
+  ['inference_catalog_unavailable', 503],
+  ['inference_model_unavailable', 409],
+  ['inference_thinking_unavailable', 409],
+])(
+  'only a matching typed %s rejection permits editing a send',
+  async (error, status) => {
+    const f = fixture();
+    await f.login();
+    f.io.request.mockResolvedValueOnce(response({ error }, Number(status)));
+    await expect(
+      f.client.send(await f.client.newRequestId(), 'draft'),
+    ).rejects.toMatchObject({
+      kind: 'conflict',
+      admissionRejected: true,
+    });
+  },
+);
+test.each([
+  response({ error: 'inference_model_unavailable' }, 503),
+  response({ error: 'message_options_changed' }, 409),
+  response({ error: 'conversation_unavailable' }, 503),
+  { ...response({}, 409), body: '{' },
+  {
+    ...response({ error: 'inference_model_unavailable' }, 409),
+    contentType: 'text/html',
+  },
+])('unproven rejection keeps the original request frozen: %#', async result => {
+  const f = fixture();
+  await f.login();
+  f.io.request.mockResolvedValueOnce(result);
+  await expect(
+    f.client.send(await f.client.newRequestId(), 'draft'),
+  ).rejects.toMatchObject({
+    admissionRejected: false,
+  });
+});
 test('push capability and mutations are session bound; stale register cannot use a new login', async () => {
   const f = fixture();
   await expect(f.client.pushAvailable()).rejects.toThrow('expired');
@@ -348,4 +386,34 @@ test('transfer claims and encrypted data reject foreign or malformed input', () 
   expect(() =>
     decryptTransfer(t.body, t.serviceKey, new Uint8Array(32)),
   ).toThrow('invalid');
+});
+
+test('model discovery and per-message thinking use the authenticated server contract', async () => {
+  const f = fixture();
+  await f.login();
+  await f.client.read('/chat/inference');
+  await f.client.read('/chat/inference?refresh=true');
+  await expect(
+    f.client.read('/chat/inference?url=https://example.com'),
+  ).rejects.toThrow('invalid');
+  const id = await f.client.newRequestId();
+  const selection = {
+    provider: 'custom:openai',
+    model: 'gpt-6.1-sol',
+    thinking: 'max',
+  };
+  await f.client.send(id, 'Synthetic model check', selection);
+  expect(f.io.request).toHaveBeenLastCalledWith(
+    ORIGIN + '/chat/messages',
+    'POST',
+    access,
+    local,
+    csrf,
+    JSON.stringify({
+      request_id: id,
+      text: 'Synthetic model check',
+      attachments: [],
+      inference: selection,
+    }),
+  );
 });

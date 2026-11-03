@@ -1,4 +1,5 @@
 import nacl from 'tweetnacl';
+import type { Selection } from '../chat/inference';
 import { decodeBase64, encodeBase64 } from 'tweetnacl-util';
 import {
   AUDIENCE,
@@ -11,6 +12,12 @@ import { Credentials, SessionError, SessionInfo, SessionIO } from './types';
 import type { PushRegistration } from '../notifications/nativePush';
 
 const localToken = /^[A-Za-z0-9_-]{40,200}$/;
+const inferenceRejections: Record<string, number> = {
+  inference_selection_invalid: 422,
+  inference_catalog_unavailable: 503,
+  inference_model_unavailable: 409,
+  inference_thinking_unavailable: 409,
+};
 /** One owner session. Credentials never belong to React screen state. */
 export class SessionClient {
   private credentials: Credentials = { access: '', local: '' };
@@ -88,6 +95,26 @@ export class SessionClient {
       throw new SessionError(
         path === '/auth/login' ? 'credentials' : 'expired',
       );
+    }
+    if (
+      path === '/chat/messages' &&
+      method === 'POST' &&
+      result.contentType.toLowerCase().startsWith('application/json') &&
+      result.body.length <= 4096
+    ) {
+      let code: unknown;
+      try {
+        code = object(JSON.parse(result.body)).error;
+      } catch {
+        // An unreadable response cannot establish whether admission happened.
+      }
+      if (
+        typeof code === 'string' &&
+        Object.hasOwn(inferenceRejections, code) &&
+        inferenceRejections[code] === result.status
+      ) {
+        throw new SessionError('conflict', true);
+      }
     }
     if (result.status === 409) {
       throw new SessionError('conflict');
@@ -283,7 +310,7 @@ export class SessionClient {
   }
   async read(path: string): Promise<Record<string, unknown>> {
     if (
-      !/^\/(?:auth\/session|chat\/(?:history(?:\?before=[1-9]\d{0,12})?|reply|library|agent-profile|messages\/[a-f0-9-]{36}))$/.test(
+      !/^\/(?:auth\/session|chat\/(?:history(?:\?before=[1-9]\d{0,12})?|reply|inference(?:\?refresh=true)?|library|agent-profile|messages\/[a-f0-9-]{36}))$/.test(
         path,
       )
     ) {
@@ -297,6 +324,7 @@ export class SessionClient {
   async send(
     requestId: string,
     text: string,
+    inference: Selection | null = null,
   ): Promise<Record<string, unknown>> {
     if (!this.credentials.local || !this.csrf) {
       throw new SessionError('expired');
@@ -315,6 +343,7 @@ export class SessionClient {
         request_id: requestId,
         text,
         attachments: [],
+        ...(inference ? { inference } : {}),
       })
     ).data;
   }

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppState,
+  Keyboard,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -17,38 +17,20 @@ import { ORIGIN, object } from '../auth/transfer';
 import { TabBar } from '../components/TabBar';
 import { LiveViewer } from '../components/LiveViewer';
 import { Action } from '../components/Action';
-import { colors, styles } from '../theme';
+import { styles } from '../theme';
+import { Conversation } from '../chat/Conversation';
+import { ModelPicker } from '../chat/ModelPicker';
+import {
+  Catalog,
+  Selection,
+  readCatalog,
+  selectionAvailable,
+} from '../chat/inference';
+import { LiveTurn, readTurns, mergeTurns, isWorking } from '../chat/transcript';
+export { readTurns } from '../chat/transcript';
 import { Destination } from '../workspace';
 
-type LiveTurn = {
-  request_id: string;
-  text: string;
-  output: string | null;
-  status: string;
-};
 type LiveFile = { id: string; name: string; kind: string };
-export function readTurns(value: unknown): LiveTurn[] {
-  if (!Array.isArray(value) || value.length > 100) {
-    throw new SessionError('invalid');
-  }
-  return value.map(item => {
-    const turn = object(item);
-    if (
-      typeof turn.request_id !== 'string' ||
-      typeof turn.text !== 'string' ||
-      typeof turn.status !== 'string' ||
-      !(turn.output === null || typeof turn.output === 'string')
-    ) {
-      throw new SessionError('invalid');
-    }
-    return {
-      request_id: turn.request_id,
-      text: turn.text,
-      status: turn.status,
-      output: turn.output,
-    };
-  });
-}
 function readFiles(value: unknown): LiveFile[] {
   if (!Array.isArray(value) || value.length > 100) {
     throw new SessionError('invalid');
@@ -66,6 +48,9 @@ function readFiles(value: unknown): LiveFile[] {
   });
 }
 function failure(error: unknown): string {
+  if (error instanceof SessionError && error.admissionRejected) {
+    return 'The model settings were not accepted. Your draft is restored. Choose another model or Default and send again.';
+  }
   if (error instanceof SessionError && error.kind === 'credentials') {
     return 'Check your username, password and current six-digit code.';
   }
@@ -141,9 +126,11 @@ export function Connected({
   const [text, setText] = useState('');
   const [turns, setTurns] = useState<LiveTurn[]>([]);
   const [files, setFiles] = useState<LiveFile[]>([]);
-  const [pending, setPending] = useState<{ id: string; text: string } | null>(
-    null,
-  );
+  const [pending, setPending] = useState<{
+    id: string;
+    text: string;
+    inference: Selection | null;
+  } | null>(null);
   const [error, setError] = useState('');
   const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -157,12 +144,66 @@ export function Connected({
   const busyRef = useRef(false);
   const pollingRef = useRef(false);
   const refreshVersion = useRef(0);
-  const conversation = useRef<ScrollView>(null);
-  const followingLatest = useRef(true);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelError, setModelError] = useState('');
+  const [olderBefore, setOlderBefore] = useState<number | null>(null);
+  const modelVersion = useRef(0);
+  const historyInitialized = useRef(false);
+  const latestWindow = useRef<LiveTurn[]>([]);
+  const retainedTurns = useRef<LiveTurn[]>([]);
+  const activeRefreshOffset = useRef(0);
   const generation = useRef(0);
   const activeRef = useRef(active);
   const signingOut = useRef(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    retainedTurns.current = turns;
+  }, [turns]);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () =>
+      setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
+  const expireSession = useCallback(async () => {
+    generation.current++;
+    refreshVersion.current++;
+    busyRef.current = false;
+    pollingRef.current = false;
+    setBusy(false);
+    setVerified(false);
+    setInfo(null);
+    setTurns([]);
+    retainedTurns.current = [];
+    setFiles([]);
+    setPending(null);
+    setNotificationRequest(null);
+    setReplyReady(false);
+    setText('');
+    setSelection(null);
+    setCatalog(null);
+    setModelsOpen(false);
+    setModelsLoading(false);
+    setOlderBefore(null);
+    historyInitialized.current = false;
+    latestWindow.current = [];
+    modelVersion.current++;
+    setStep('access');
+    await Promise.all([
+      client.logout().catch(() => undefined),
+      notifications?.disable().catch(() => undefined),
+    ]);
+  }, [client, notifications]);
   const run = useCallback(
     async (action: () => Promise<void>, quiet = false) => {
       if (busyRef.current || (quiet && pollingRef.current)) {
@@ -184,18 +225,7 @@ export function Connected({
         if (epoch === generation.current) {
           setError(failure(error_));
           if (error_ instanceof SessionError && error_.kind === 'expired') {
-            setInfo(null);
-            setTurns([]);
-            setFiles([]);
-            setPending(null);
-            setNotificationRequest(null);
-            setReplyReady(false);
-            setText('');
-            setStep('access');
-            await Promise.all([
-              client.logout().catch(() => undefined),
-              notifications?.disable().catch(() => undefined),
-            ]);
+            await expireSession();
           }
         }
       } finally {
@@ -209,7 +239,7 @@ export function Connected({
         }
       }
     },
-    [client, notifications],
+    [expireSession],
   );
   const restore = useCallback(
     async (epoch: number) => {
@@ -279,21 +309,148 @@ export function Connected({
     };
   }, [step, info?.username, notifications]);
 
+  const receiveLatest = useCallback(
+    (result: Record<string, unknown>, refreshed: LiveTurn[] = []) => {
+      const incoming = readTurns(result.turns);
+      const prior = latestWindow.current;
+      const ids = new Set(prior.map(turn => turn.request_id));
+      // A bounded latest page can skip past the entire previous page while this
+      // device is away. Restart pagination rather than preserve an invisible gap
+      // or a stale running turn that no later poll can update.
+      const advancedPastWindow =
+        historyInitialized.current &&
+        prior.length > 0 &&
+        incoming.length > 0 &&
+        !incoming.some(turn => ids.has(turn.request_id)) &&
+        Math.max(...incoming.map(turn => turn.seq ?? 0)) >
+          Math.max(...prior.map(turn => turn.seq ?? 0));
+      latestWindow.current = incoming;
+      setTurns(previous =>
+        advancedPastWindow
+          ? incoming
+          : mergeTurns(previous, [...incoming, ...refreshed]),
+      );
+      if (!historyInitialized.current || advancedPastWindow) {
+        historyInitialized.current = true;
+        setOlderBefore(
+          typeof result.older_before === 'number' ? result.older_before : null,
+        );
+      }
+      return incoming;
+    },
+    [],
+  );
   const refresh = useCallback(async () => {
     const epoch = generation.current;
     const version = ++refreshVersion.current;
     const result = await client.read(
       refreshPath(destination, notificationRequest),
     );
+    let refreshed: LiveTurn[] = [];
+    if (destination === 'Chat' && !notificationRequest) {
+      const currentIds = new Set(
+        readTurns(result.turns).map(turn => turn.request_id),
+      );
+      const overlaps = latestWindow.current.some(turn =>
+        currentIds.has(turn.request_id),
+      );
+      const outside = overlaps
+        ? retainedTurns.current.filter(
+            turn => isWorking(turn) && !currentIds.has(turn.request_id),
+          )
+        : [];
+      // Older pages can contain active turns too. Bound each poll's extra reads,
+      // rotating through a large queue so no retained active row is stranded.
+      const start = outside.length
+        ? activeRefreshOffset.current % outside.length
+        : 0;
+      const batch = [...outside.slice(start), ...outside.slice(0, start)].slice(
+        0,
+        10,
+      );
+      activeRefreshOffset.current = start + batch.length;
+      const receipts = await Promise.all(
+        batch.map(turn => client.read('/chat/messages/' + turn.request_id)),
+      );
+      refreshed = receipts.flatMap(receipt => readTurns([receipt.turn]));
+    }
     if (epoch !== generation.current || version !== refreshVersion.current) {
       return;
     }
     if (destination === 'Library') {
       setFiles(readFiles(result.files));
     } else {
-      setTurns(readTurns(notificationRequest ? [result.turn] : result.turns));
+      const incoming = notificationRequest
+        ? readTurns([result.turn])
+        : receiveLatest(result, refreshed);
+      if (notificationRequest) {
+        setTurns(incoming);
+      }
+      setPending(previous =>
+        previous && incoming.some(turn => turn.request_id === previous.id)
+          ? null
+          : previous,
+      );
     }
-  }, [client, destination, notificationRequest]);
+  }, [client, destination, notificationRequest, receiveLatest]);
+  const loadModels = useCallback(
+    async (force = false) => {
+      const epoch = generation.current,
+        version = ++modelVersion.current;
+      setModelsLoading(true);
+      try {
+        const value = await client.read(
+          '/chat/inference' + (force ? '?refresh=true' : ''),
+        );
+        if (epoch === generation.current && version === modelVersion.current) {
+          setCatalog(readCatalog(value));
+          setModelError('');
+        }
+      } catch (catalogError) {
+        if (epoch === generation.current && version === modelVersion.current) {
+          if (
+            catalogError instanceof SessionError &&
+            catalogError.kind === 'expired'
+          ) {
+            setError(failure(catalogError));
+            await expireSession();
+          } else {
+            setCatalog(null);
+            setModelError('Models could not be checked. Retry or use Default.');
+          }
+        }
+      } finally {
+        if (epoch === generation.current && version === modelVersion.current) {
+          setModelsLoading(false);
+        }
+      }
+    },
+    [client, expireSession],
+  );
+  useEffect(() => {
+    if (
+      step === 'workspace' &&
+      active &&
+      verified &&
+      info?.features.inference
+    ) {
+      loadModels();
+    }
+  }, [step, active, verified, info?.features.inference, loadModels]);
+  async function earlier() {
+    if (!olderBefore) {
+      return;
+    }
+    const epoch = generation.current;
+    const result = await client.read('/chat/history?before=' + olderBefore);
+    if (epoch !== generation.current) {
+      return;
+    }
+    setTurns(previous => mergeTurns(previous, readTurns(result.turns)));
+    setOlderBefore(
+      typeof result.older_before === 'number' ? result.older_before : null,
+    );
+  }
   const revalidate = useCallback(async () => {
     const epoch = generation.current;
     const result = await client.read('/auth/session');
@@ -334,9 +491,16 @@ export function Connected({
     setBusy(true);
     setInfo(null);
     setTurns([]);
+    retainedTurns.current = [];
     setFiles([]);
     setText('');
     setPending(null);
+    setSelection(null);
+    setCatalog(null);
+    setModelsOpen(false);
+    setOlderBefore(null);
+    historyInitialized.current = false;
+    latestWindow.current = [];
     setNotificationRequest(null);
     setReplyReady(false);
     setPassword('');
@@ -381,27 +545,49 @@ export function Connected({
     const frozen = pending ?? {
       id: await client.newRequestId(),
       text: text.trim(),
+      inference: selection ? { ...selection } : null,
     };
     if (epoch !== generation.current) {
       return;
     }
     setPending(frozen);
-    followingLatest.current = true;
+    setText('');
     // Every explicit retry uses the same request ID and frozen text. Never auto-resubmit.
-    await client.send(frozen.id, frozen.text);
+    let receipt;
+    try {
+      receipt = frozen.inference
+        ? await client.send(frozen.id, frozen.text, frozen.inference)
+        : await client.send(frozen.id, frozen.text);
+    } catch (sendError) {
+      if (
+        epoch === generation.current &&
+        sendError instanceof SessionError &&
+        sendError.admissionRejected
+      ) {
+        setPending(null);
+        setText(frozen.text);
+      }
+      throw sendError;
+    }
     if (epoch !== generation.current) {
       return;
     }
     setPending(null);
+    if (Array.isArray(receipt.turns)) {
+      setTurns(previous => mergeTurns(previous, readTurns(receipt.turns)));
+    }
     setText('');
     if (notificationRequest) {
+      historyInitialized.current = false;
+      latestWindow.current = [];
+      setOlderBefore(null);
       setNotificationRequest(null);
       setReplyReady(false);
     }
     const version = ++refreshVersion.current;
     const result = await client.read('/chat/reply');
     if (epoch === generation.current && version === refreshVersion.current) {
-      setTurns(readTurns(result.turns));
+      receiveLatest(result);
     }
   }
   if (step === 'workspace' && active && !verified) {
@@ -521,94 +707,46 @@ export function Connected({
         />
       )}
       {step === 'workspace' && destination === 'Chat' && (
-        <View style={styles.grow}>
-          <ScrollView
-            ref={conversation}
-            testID="conversation-history"
-            style={styles.grow}
-            contentContainerStyle={styles.page}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            scrollEventThrottle={16}
-            onScroll={({ nativeEvent }) => {
-              const { contentOffset, contentSize, layoutMeasurement } =
-                nativeEvent;
-              followingLatest.current =
-                contentSize.height -
-                  contentOffset.y -
-                  layoutMeasurement.height <
-                80;
+        <>
+          <Conversation
+            turns={turns}
+            text={text}
+            setText={setText}
+            pending={pending}
+            busy={busy}
+            send={() => run(send)}
+            refresh={() => run(refresh)}
+            earlier={() => run(earlier)}
+            hasEarlier={Boolean(olderBefore) && !notificationRequest}
+            replyReady={replyReady}
+            notificationRequest={notificationRequest}
+            returnToCurrent={() => {
+              historyInitialized.current = false;
+              latestWindow.current = [];
+              setOlderBefore(null);
+              setNotificationRequest(null);
+              setReplyReady(false);
+              setTurns([]);
             }}
-            onLayout={() => {
-              if (followingLatest.current) {
-                conversation.current?.scrollToEnd({ animated: false });
-              }
+            selection={selection}
+            openModels={() => {
+              Keyboard.dismiss();
+              setModelsOpen(true);
             }}
-            onContentSizeChange={() => {
-              if (followingLatest.current) {
-                conversation.current?.scrollToEnd({ animated: false });
-              }
-            }}
-          >
-            <Text style={styles.title}>Your conversation.</Text>
-            {replyReady && (
-              <Text style={styles.small}>A Radhouse reply is ready.</Text>
-            )}
-            {notificationRequest && (
-              <Action
-                title="Back to current conversation"
-                secondary
-                onPress={() => {
-                  setNotificationRequest(null);
-                  setReplyReady(false);
-                }}
-              />
-            )}
-            {turns.map(turn => (
-              <View key={turn.request_id} style={styles.card}>
-                <Text style={styles.eyebrow}>YOU</Text>
-                <Text style={styles.body}>{turn.text}</Text>
-                <Text style={styles.small}>{turn.status}</Text>
-                {turn.output ? (
-                  <Text selectable style={styles.body}>
-                    {turn.output}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
-            <Action
-              title="Refresh conversation"
-              secondary
-              disabled={busy}
-              onPress={() => run(refresh)}
-            />
-          </ScrollView>
-          <View testID="conversation-composer" style={chatStyles.composer}>
-            <View style={styles.row}>
-              <TextInput
-                accessibilityLabel="Message Radhouse"
-                value={pending?.text ?? text}
-                editable={!pending}
-                onChangeText={setText}
-                multiline
-                maxLength={16000}
-                style={[styles.input, chatStyles.input]}
-                placeholder="What’s on your mind?"
-              />
-              <Action
-                title={pending ? 'Retry same message' : 'Send message'}
-                disabled={busy || !(pending || text.trim())}
-                onPress={() => run(send)}
-              />
-            </View>
-            {pending && (
-              <Text style={styles.small}>
-                Submission is unconfirmed. Retry sends the same message
-                identifier, so a lost response cannot create a second message.
-              </Text>
-            )}
-          </View>
-        </View>
+            modelsAvailable={Boolean(info?.features.inference)}
+            selectionValid={selectionAvailable(catalog, selection)}
+          />
+          <ModelPicker
+            visible={modelsOpen}
+            close={() => setModelsOpen(false)}
+            catalog={catalog}
+            selection={selection}
+            select={setSelection}
+            refresh={() => loadModels(true)}
+            loading={modelsLoading}
+            error={modelError}
+          />
+        </>
       )}
       {step === 'workspace' && destination === 'Library' && (
         <ScrollView contentContainerStyle={styles.page}>
@@ -669,7 +807,7 @@ export function Connected({
           <Action title="Sign out" secondary onPress={signOut} />
         </ScrollView>
       )}
-      {step === 'workspace' && (
+      {step === 'workspace' && !keyboardVisible && (
         <TabBar
           destination={destination}
           select={setDestination}
@@ -679,15 +817,3 @@ export function Connected({
     </View>
   );
 }
-
-const chatStyles = StyleSheet.create({
-  composer: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.paper,
-  },
-  input: { flex: 1, maxHeight: 120, textAlignVertical: 'top' },
-});

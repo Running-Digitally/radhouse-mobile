@@ -175,6 +175,129 @@ function CanvasStatus({
   );
 }
 
+function BrowserTools({
+  visible,
+  state,
+  blocked,
+  zoom,
+  send,
+  onClose,
+  onZoom,
+}: Readonly<{
+  visible: boolean;
+  state: BrowserPresentation | null;
+  blocked: boolean;
+  zoom: boolean;
+  send: (command: BrowserCommand) => void;
+  onClose: () => void;
+  onZoom: (enabled: boolean) => void;
+}>) {
+  const live = state?.state === 'live';
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={local.modal}>
+        <Pressable
+          style={local.scrim}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss browser tools"
+          onPress={onClose}
+        />
+        <View style={local.sheet}>
+          <View style={styles.spread}>
+            <Text style={local.sheetTitle}>Browser tools</Text>
+            <Tool label="Done" onPress={onClose} />
+          </View>
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <Text style={styles.body}>{browserLabel(state)}</Text>
+            {state?.human && (
+              <>
+                <Text style={local.explanation}>
+                  {state.observing
+                    ? 'The agent can read this page when you ask in chat. You still control it.'
+                    : 'The agent cannot see this page while you are in Private mode.'}
+                </Text>
+                <Tool
+                  label={state.observing ? 'Make private' : 'Let agent observe'}
+                  disabled={blocked}
+                  onPress={() =>
+                    send({
+                      action: 'visibility',
+                      mode: state.observing ? 'private' : 'observe',
+                    })
+                  }
+                />
+                <View style={local.footer}>
+                  <Tool
+                    label="Back"
+                    disabled={blocked || !state.inputReady}
+                    onPress={() => send({ action: 'key', key: 'back' })}
+                  />
+                  <Tool
+                    label="Reload"
+                    disabled={blocked || !state.inputReady}
+                    onPress={() => send({ action: 'key', key: 'reload' })}
+                  />
+                </View>
+                <Tool
+                  label="Dismiss keyboard"
+                  onPress={() => send({ action: 'hideKeyboard' })}
+                />
+                <View style={local.footer}>
+                  {(['tab', 'enter', 'escape'] as const).map(key => (
+                    <Tool
+                      key={key}
+                      label={key.charAt(0).toUpperCase() + key.slice(1)}
+                      disabled={blocked || !state.inputReady}
+                      onPress={() => send({ action: 'key', key })}
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+            <Tool
+              label={zoom ? 'Fit page' : 'Zoom to read'}
+              disabled={!live}
+              onPress={() => {
+                onZoom(!zoom);
+                onClose();
+              }}
+            />
+            <Tool
+              label="Reconnect view"
+              disabled={!live}
+              onPress={() => {
+                send({ action: 'reconnect' });
+                onClose();
+              }}
+            />
+            {state?.previousDownloadsUnavailable && (
+              <Text style={local.explanation}>
+                Downloads from an earlier browser are unavailable. No missing
+                file has been marked as saved.
+              </Text>
+            )}
+            <Tool
+              label="Close browser"
+              disabled={
+                blocked || !live || (state?.mode === 'human' && !state?.human)
+              }
+              onPress={() => {
+                send({ action: 'close' });
+                onClose();
+              }}
+            />
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 export function NativeBrowser({
   origin,
   tab,
@@ -390,110 +513,18 @@ export function NativeBrowser({
           </SafeAreaView>
         </KeyboardAvoidingView>
       </Modal>
-      <Modal
+      <BrowserTools
         visible={full && tools}
-        transparent
-        animationType="slide"
-        onRequestClose={dismissTools}
-      >
-        <SafeAreaView style={local.modal}>
-          <Pressable
-            style={local.scrim}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss browser tools"
-            onPress={dismissTools}
-          />
-          <View style={local.sheet}>
-            <View style={styles.spread}>
-              <Text style={local.sheetTitle}>Browser tools</Text>
-              <Tool label="Done" onPress={dismissTools} />
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
-              <Text style={styles.body}>{browserLabel(state)}</Text>
-              {state?.human && (
-                <>
-                  <Text style={local.explanation}>
-                    {state.observing
-                      ? 'The agent can read this page when you ask in chat. You still control it.'
-                      : 'The agent cannot see this page while you are in Private mode.'}
-                  </Text>
-                  <Tool
-                    label={
-                      state.observing ? 'Make private' : 'Let agent observe'
-                    }
-                    disabled={blocked}
-                    onPress={() =>
-                      send({
-                        action: 'visibility',
-                        mode: state.observing ? 'private' : 'observe',
-                      })
-                    }
-                  />
-                  <View style={local.footer}>
-                    <Tool
-                      label="Back"
-                      disabled={blocked || !state.inputReady}
-                      onPress={() => send({ action: 'key', key: 'back' })}
-                    />
-                    <Tool
-                      label="Reload"
-                      disabled={blocked || !state.inputReady}
-                      onPress={() => send({ action: 'key', key: 'reload' })}
-                    />
-                  </View>
-                  <Tool
-                    label="Dismiss keyboard"
-                    onPress={() => send({ action: 'hideKeyboard' })}
-                  />
-                  <View style={local.footer}>
-                    {(['tab', 'enter', 'escape'] as const).map(key => (
-                      <Tool
-                        key={key}
-                        label={key.charAt(0).toUpperCase() + key.slice(1)}
-                        disabled={blocked || !state.inputReady}
-                        onPress={() => send({ action: 'key', key })}
-                      />
-                    ))}
-                  </View>
-                </>
-              )}
-              <Tool
-                label={zoom ? 'Fit page' : 'Zoom to read'}
-                disabled={!live}
-                onPress={() => {
-                  setZoom(!zoom);
-                  send({ action: 'zoom', enabled: !zoom });
-                  dismissTools();
-                }}
-              />
-              <Tool
-                label="Reconnect view"
-                disabled={!live}
-                onPress={() => {
-                  send({ action: 'reconnect' });
-                  dismissTools();
-                }}
-              />
-              {state?.previousDownloadsUnavailable && (
-                <Text style={local.explanation}>
-                  Downloads from an earlier browser are unavailable. No missing
-                  file has been marked as saved.
-                </Text>
-              )}
-              <Tool
-                label="Close browser"
-                disabled={
-                  blocked || !live || (state?.mode === 'human' && !state?.human)
-                }
-                onPress={() => {
-                  send({ action: 'close' });
-                  dismissTools();
-                }}
-              />
-            </ScrollView>
-          </View>
-        </SafeAreaView>
-      </Modal>
+        state={state}
+        blocked={blocked}
+        zoom={zoom}
+        send={send}
+        onClose={dismissTools}
+        onZoom={enabled => {
+          setZoom(enabled);
+          send({ action: 'zoom', enabled });
+        }}
+      />
     </View>
   );
 }

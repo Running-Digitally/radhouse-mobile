@@ -9,6 +9,7 @@ export class SessionError extends Error {
       | 'unsupported'
       | 'credentials'
       | 'conflict',
+    public readonly admissionRejected = false,
   ) {
     super(kind);
   }

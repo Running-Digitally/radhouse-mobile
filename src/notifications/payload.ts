@@ -14,6 +14,7 @@ export type AgentNotification = ReplyNotification | CommitmentNotification;
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fields = new Set(['version', 'kind', 'event_id', 'request_id']);
+const commitmentFields = new Set(['version', 'kind', 'event_id', 'item_id']);
 export function replyNotification(value: unknown): ReplyNotification | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
@@ -45,7 +46,8 @@ export function agentNotification(value: unknown): AgentNotification | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const data = value as Record<string, unknown>;
   if (
-    Object.keys(data).sort().join(',') !== 'event_id,item_id,kind,version' ||
+    Object.keys(data).length !== commitmentFields.size ||
+    Object.keys(data).some(key => !commitmentFields.has(key)) ||
     data.version !== '2' ||
     data.kind !== 'commitment_ready' ||
     typeof data.event_id !== 'string' ||

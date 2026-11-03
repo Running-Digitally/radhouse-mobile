@@ -8,7 +8,13 @@ import {
   object,
   tokenExpiry,
 } from './transfer';
-import { Credentials, SessionError, SessionInfo, SessionIO } from './types';
+import {
+  Credentials,
+  HTTPResult,
+  SessionError,
+  SessionInfo,
+  SessionIO,
+} from './types';
 import type { PushRegistration } from '../notifications/nativePush';
 
 const localToken = /^[A-Za-z0-9_-]{40,200}$/;
@@ -18,6 +24,58 @@ const inferenceRejections: Record<string, number> = {
   inference_model_unavailable: 409,
   inference_thinking_unavailable: 409,
 };
+const readablePaths = new Set([
+  '/auth/session',
+  '/chat/history',
+  '/chat/reply',
+  '/chat/inference',
+  '/chat/inference?refresh=true',
+  '/chat/library',
+  '/chat/agent-profile',
+]);
+function inferenceAdmissionRejected(result: HTTPResult): boolean {
+  if (
+    !result.contentType.toLowerCase().startsWith('application/json') ||
+    result.body.length > 4096
+  ) {
+    return false;
+  }
+  try {
+    const code = object(JSON.parse(result.body)).error;
+    return (
+      typeof code === 'string' &&
+      Object.hasOwn(inferenceRejections, code) &&
+      inferenceRejections[code] === result.status
+    );
+  } catch {
+    // An unreadable response cannot establish whether admission happened.
+    return false;
+  }
+}
+function checkHTTPStatus(result: HTTPResult, path: string, method: string) {
+  if (result.status >= 300 && result.status < 400) {
+    throw new SessionError('expired');
+  }
+  if (result.status === 401 || result.status === 403) {
+    throw new SessionError(path === '/auth/login' ? 'credentials' : 'expired');
+  }
+  if (
+    path === '/chat/messages' &&
+    method === 'POST' &&
+    inferenceAdmissionRejected(result)
+  ) {
+    throw new SessionError('conflict', true);
+  }
+  if (result.status === 409) {
+    throw new SessionError('conflict');
+  }
+  if (result.status === 404 && path.startsWith('/chat/push/')) {
+    throw new SessionError('unsupported');
+  }
+  if (result.status < 200 || result.status >= 300) {
+    throw new SessionError('unavailable');
+  }
+}
 /** One owner session. Credentials never belong to React screen state. */
 export class SessionClient {
   private credentials: Credentials = { access: '', local: '' };
@@ -88,43 +146,7 @@ export class SessionClient {
       throw new SessionError('unavailable');
     }
     this.current(epoch);
-    if (result.status >= 300 && result.status < 400) {
-      throw new SessionError('expired');
-    }
-    if (result.status === 401 || result.status === 403) {
-      throw new SessionError(
-        path === '/auth/login' ? 'credentials' : 'expired',
-      );
-    }
-    if (
-      path === '/chat/messages' &&
-      method === 'POST' &&
-      result.contentType.toLowerCase().startsWith('application/json') &&
-      result.body.length <= 4096
-    ) {
-      let code: unknown;
-      try {
-        code = object(JSON.parse(result.body)).error;
-      } catch {
-        // An unreadable response cannot establish whether admission happened.
-      }
-      if (
-        typeof code === 'string' &&
-        Object.hasOwn(inferenceRejections, code) &&
-        inferenceRejections[code] === result.status
-      ) {
-        throw new SessionError('conflict', true);
-      }
-    }
-    if (result.status === 409) {
-      throw new SessionError('conflict');
-    }
-    if (result.status === 404 && path.startsWith('/chat/push/')) {
-      throw new SessionError('unsupported');
-    }
-    if (result.status < 200 || result.status >= 300) {
-      throw new SessionError('unavailable');
-    }
+    checkHTTPStatus(result, path, method);
     if (
       !result.contentType.toLowerCase().startsWith('application/json') ||
       result.body.length > 4194304
@@ -310,9 +332,9 @@ export class SessionClient {
   }
   async read(path: string): Promise<Record<string, unknown>> {
     if (
-      !/^\/(?:auth\/session|chat\/(?:history(?:\?before=[1-9]\d{0,12})?|reply|inference(?:\?refresh=true)?|library|agent-profile|messages\/[a-f0-9-]{36}))$/.test(
-        path,
-      )
+      !readablePaths.has(path) &&
+      !/^\/chat\/history\?before=[1-9]\d{0,12}$/.test(path) &&
+      !/^\/chat\/messages\/[a-f0-9-]{36}$/.test(path)
     ) {
       throw new SessionError('invalid');
     }

@@ -37,3 +37,35 @@ contract. Native builds and an isolated iOS simulator harness using the actual
 Connected screen were checked with synthetic data. Physical-device Android
 keyboard behavior, large text and screen-reader task completion remain release
 acceptance checks. These source changes do not constitute an app-store release.
+
+## Selected commitment research
+
+Responsibilities exposes public-web research separately on each confirmed
+commitment with ongoing follow-up. It starts off. Enabling it requires a public
+question and explains that only that question goes to Keenable; saved quotes,
+progress, browser logins and other chats are not sent as search terms. The server
+collects at most two public pages before its existing private, tool-free review.
+The shared engineering contract is the
+[browser and public-research plan](https://github.com/Running-Digitally/radhouse/blob/main/docs/plans/2026-11-03-browser-and-public-research.md).
+
+The UI shows limited or unavailable coverage, retrieval time and source citations
+with exact excerpts. Source links open only after an owner tap. Text is rendered
+in native components, never interpreted as HTML or instructions. Stop public
+research works while all reviews are paused; editing or stopping sends the current
+commitment revision so a stale screen cannot overwrite a newer decision.
+
+Existing follow-up actions and older servers remain supported. Research does not
+change notification consent, daily budgets or quiet hours, mark work complete,
+send messages to other people or perform external actions. Unit and web fixtures
+do not replace the required native simulator and physical owner-release checks.
+
+The foreground Browser viewer permits its silent live video to start after the
+owner opens the browser. Requiring a second native WebView playback gesture
+prevented iOS worker-generated video tracks from loading their first frame;
+the simulator reproduced zero video width and then presented live frames after
+this correction. Terminal retains its previous playback requirement. This does
+not change authentication, HTTPS-only navigation, file access, popups, browser
+ownership, Private/Observe grants, or foreground-only mounting. Inspection and
+diagnostic scripts are absent from the shipping viewer. The library maps this
+setting to WKWebView's media playback policy; see its
+[API reference](https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#mediaplaybackrequiresuseraction).

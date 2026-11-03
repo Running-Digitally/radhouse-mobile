@@ -3,6 +3,14 @@ import { Text, TextInput, View } from 'react-native';
 import { FollowupAction } from '../auth/client';
 import { Action } from './Action';
 import { styles } from '../theme';
+import {
+  Citation,
+  CommitmentResearch,
+  publicCitation,
+  readResearch,
+  Research,
+  ResearchCitations,
+} from './CommitmentResearch';
 
 export type Followup = {
   state: string;
@@ -10,11 +18,13 @@ export type Followup = {
   next_review_at: number;
   last_review_at: number | null;
   progress: string;
+  research?: Research;
   latest_note: {
     action: string;
     reason: string;
     preparation: string;
     quote: string;
+    citations?: Citation[];
   } | null;
 };
 
@@ -35,6 +45,14 @@ export function readFollowup(raw: unknown): Followup | null {
   )
     throw new Error('invalid');
   const note = value.latest_note;
+  if (
+    !readResearch(value.research) ||
+    (note?.citations !== undefined &&
+      (!Array.isArray(note.citations) ||
+        note.citations.length > 2 ||
+        !note.citations.every(publicCitation)))
+  )
+    throw new Error('invalid');
   if (
     note !== null &&
     (!note ||
@@ -97,7 +115,18 @@ export function CommitmentFollowup({
           <Text selectable style={styles.small}>
             “{value.latest_note.quote}”
           </Text>
+          <ResearchCitations values={value.latest_note.citations || []} />
         </>
+      ) : null}
+      {value.research ? (
+        <CommitmentResearch
+          value={value.research}
+          revision={revision}
+          live={live}
+          active={active}
+          busy={busy}
+          onChange={onChange}
+        />
       ) : null}
       {live ? (
         <>

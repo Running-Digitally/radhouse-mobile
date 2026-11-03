@@ -77,6 +77,12 @@ function checkHTTPStatus(result: HTTPResult, path: string, method: string) {
   }
 }
 /** One owner session. Credentials never belong to React screen state. */
+export type FollowupAction = { revision: number } & (
+  | { action: 'progress'; progress: string }
+  | { action: 'snooze'; days: 1 | 3 | 7 }
+  | { action: 'resume' | 'complete' | 'stop' }
+);
+
 export class SessionClient {
   private credentials: Credentials = { access: '', local: '' };
   private csrf = '';
@@ -402,11 +408,11 @@ export class SessionClient {
   }
   async commitmentDecision(
     identifier: string,
-    decision: 'confirmed' | 'dismissed',
+    decision: 'confirmed' | 'dismissed' | 'confirmed_followup',
   ) {
     if (
       !/^[a-f0-9-]{36}$/.test(identifier) ||
-      !['confirmed', 'dismissed'].includes(decision)
+      !['confirmed', 'dismissed', 'confirmed_followup'].includes(decision)
     )
       throw new SessionError('invalid');
     if (!this.credentials.local) throw new SessionError('expired');
@@ -416,6 +422,27 @@ export class SessionClient {
         this.credentials,
         'POST',
         { decision },
+      )
+    ).data;
+  }
+  async commitmentFollowup(identifier: string, action: FollowupAction) {
+    if (
+      !/^[a-f0-9-]{36}$/.test(identifier) ||
+      !Number.isInteger(action.revision) ||
+      action.revision < 1 ||
+      !['progress', 'snooze', 'resume', 'complete', 'stop'].includes(
+        action.action,
+      )
+    ) {
+      throw new SessionError('invalid');
+    }
+    if (!this.credentials.local) throw new SessionError('expired');
+    return (
+      await this.json(
+        '/chat/responsibilities/commitments/' + identifier,
+        this.credentials,
+        'POST',
+        action,
       )
     ).data;
   }

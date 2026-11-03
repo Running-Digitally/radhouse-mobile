@@ -122,6 +122,16 @@ export function Commitments({
     value?.coverage?.outcome === 'budget_wait'
       ? 'budget_wait'
       : value?.last_review?.state ?? value?.coverage?.outcome ?? '';
+  let coverageMessage = 'No completed review yet.';
+  if (stale) {
+    coverageMessage = 'Recent coverage has not been established.';
+  } else if (value?.coverage) {
+    coverageMessage =
+      'Last check: ' +
+      new Date(value.coverage.checked_at * 1000).toLocaleString() +
+      '. ' +
+      (outcomes[outcome] ?? 'Review status unavailable.');
+  }
   const items =
     value?.suggestions.filter(item => !focusId || item.id === focusId) ?? [];
   return (
@@ -144,15 +154,7 @@ export function Commitments({
       {value ? (
         <>
           <Text style={styles.small}>
-            {value.active ? 'Permission enabled.' : 'Paused.'}{' '}
-            {stale
-              ? 'Recent coverage has not been established.'
-              : value.coverage
-              ? 'Last check: ' +
-                new Date(value.coverage.checked_at * 1000).toLocaleString() +
-                '. ' +
-                (outcomes[outcome] ?? 'Review status unavailable.')
-              : 'No completed review yet.'}
+            {value.active ? 'Permission enabled.' : 'Paused.'} {coverageMessage}
           </Text>
           <Action
             title={value.active ? 'Pause suggestions' : 'Enable suggestions'}

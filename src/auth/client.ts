@@ -431,9 +431,16 @@ export class SessionClient {
       !/^[a-f0-9-]{36}$/.test(identifier) ||
       !Number.isInteger(action.revision) ||
       action.revision < 1 ||
-      !['progress', 'snooze', 'resume', 'complete', 'stop'].includes(
-        action.action,
-      )
+      ![
+        'progress',
+        'snooze',
+        'resume',
+        'complete',
+        'stop',
+        'research',
+      ].includes(action.action) ||
+      (action.action === 'research' &&
+        (typeof action.question !== 'string' || action.question.length > 300))
     ) {
       throw new SessionError('invalid');
     }

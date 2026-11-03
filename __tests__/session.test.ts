@@ -84,6 +84,32 @@ function fixture() {
   };
   return { io, client, login };
 }
+test.each(['What helps a clear technical draft?', ''])(
+  'research enable and revoke reach the authenticated request path: %s',
+  async question => {
+    const f = fixture();
+    await f.login();
+    const id = await f.client.newRequestId();
+    const action = { action: 'research' as const, revision: 4, question };
+    await f.client.commitmentFollowup(id, action);
+    expect(f.io.request).toHaveBeenLastCalledWith(
+      ORIGIN + '/chat/responsibilities/commitments/' + id,
+      'POST',
+      access,
+      local,
+      csrf,
+      JSON.stringify(action),
+    );
+    const calls = f.io.request.mock.calls.length;
+    await expect(
+      f.client.commitmentFollowup(id, {
+        ...action,
+        question: 'q'.repeat(301),
+      }),
+    ).rejects.toThrow('invalid');
+    expect(f.io.request).toHaveBeenCalledTimes(calls);
+  },
+);
 test.each([
   ['inference_selection_invalid', 422],
   ['inference_catalog_unavailable', 503],

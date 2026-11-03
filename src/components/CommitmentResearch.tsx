@@ -143,7 +143,8 @@ export function CommitmentResearch({
           {new Date(coverage.checked_at * 1000).toLocaleString()}. Search does
           not cover the whole web.
         </Text>
-      ) : value.enabled && live ? (
+      ) : null}
+      {!coverage && value.enabled && live ? (
         <Text style={styles.small}>Awaiting its first public-web check.</Text>
       ) : null}
       {live ? (

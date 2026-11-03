@@ -58,3 +58,14 @@ Existing follow-up actions and older servers remain supported. Research does not
 change notification consent, daily budgets or quiet hours, mark work complete,
 send messages to other people or perform external actions. Unit and web fixtures
 do not replace the required native simulator and physical owner-release checks.
+
+The foreground Browser viewer permits its silent live video to start after the
+owner opens the browser. Requiring a second native WebView playback gesture
+prevented iOS worker-generated video tracks from loading their first frame;
+the simulator reproduced zero video width and then presented live frames after
+this correction. Terminal retains its previous playback requirement. This does
+not change authentication, HTTPS-only navigation, file access, popups, browser
+ownership, Private/Observe grants, or foreground-only mounting. Inspection and
+diagnostic scripts are absent from the shipping viewer. The library maps this
+setting to WKWebView's media playback policy; see its
+[API reference](https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#mediaplaybackrequiresuseraction).

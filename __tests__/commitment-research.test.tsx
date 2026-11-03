@@ -138,3 +138,57 @@ test('older servers remain compatible and do not display unavailable controls', 
   );
   expect(ui.queryByText('Enable public research')).toBeNull();
 });
+
+test('research can be stopped while global reviews are paused', async () => {
+  const onChange = jest.fn();
+  const ui = await renderAsync(
+    <CommitmentFollowup
+      value={{
+        ...followup,
+        research: {
+          enabled: true,
+          question: 'Public question',
+          coverage: null,
+        },
+      }}
+      active={false}
+      busy={false}
+      onChange={onChange}
+    />,
+  );
+  fireEvent.press(ui.getByText('Update public question'));
+  expect(onChange).not.toHaveBeenCalled();
+  fireEvent.press(ui.getByText('Stop public research'));
+  expect(onChange).toHaveBeenCalledWith({
+    action: 'research',
+    revision: 4,
+    question: '',
+  });
+});
+
+test.each(['completed', 'stopped', 'scope_changed'])(
+  'ended follow-up %s does not promise another research check',
+  async state => {
+    const ui = await renderAsync(
+      <CommitmentFollowup
+        value={{
+          ...followup,
+          state,
+          research: {
+            enabled: true,
+            question: 'Public question',
+            coverage: null,
+          },
+        }}
+        active
+        busy={false}
+        onChange={jest.fn()}
+      />,
+    );
+    expect(
+      ui.getByText('Research is inactive because this follow-up has ended.'),
+    ).toBeTruthy();
+    expect(ui.queryByText('Awaiting its first public-web check.')).toBeNull();
+    expect(ui.queryByText('Update public question')).toBeNull();
+  },
+);

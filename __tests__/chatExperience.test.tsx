@@ -205,7 +205,7 @@ test('resuming after more than a latest page reopens history pagination and remo
         }
       : originalRead(path),
   );
-  fireEvent.press(ui.getByText('Refresh conversation'));
+  await act(async () => fireEvent.press(ui.getByText('Refresh conversation')));
   await waitFor(() =>
     expect(ui.getAllByText('Working on your reply').length).toBeGreaterThan(0),
   );
@@ -223,7 +223,15 @@ test('resuming after more than a latest page reopens history pagination and remo
         }
       : originalRead(path),
   );
-  fireEvent.press(ui.getByText('Load earlier messages'));
+  // The refresh can publish its rows before its final busy-state update. Wait
+  // until a user could actually press the next control, not just see its label.
+  await waitFor(() =>
+    expect(
+      ui.getByRole('button', { name: 'Load earlier messages' }).props
+        .accessibilityState.disabled,
+    ).toBe(false),
+  );
+  await act(async () => fireEvent.press(ui.getByText('Load earlier messages')));
   await waitFor(() =>
     expect(ui.queryByText('Load earlier messages')).toBeNull(),
   );
@@ -258,7 +266,7 @@ test('resuming after more than a latest page reopens history pagination and remo
   expect(ui.getByLabelText('Message Radhouse').props.value).toBe(
     'Keep this draft',
   );
-  fireEvent.press(ui.getByText('Load earlier messages'));
+  await act(async () => fireEvent.press(ui.getByText('Load earlier messages')));
   await waitFor(() => expect(ui.getByText('Recovered gap')).toBeTruthy());
   expect(client.read).toHaveBeenCalledWith('/chat/history?before=71');
 });

@@ -127,14 +127,14 @@ export function CommitmentResearch({
   const [question, setQuestion] = useState(value.question);
   useEffect(() => setQuestion(value.question), [value.question, revision]);
   const coverage = value.coverage;
+  let status = 'Off for this commitment.';
+  if (value.enabled) status = 'Enabled for this commitment.';
+  if (value.enabled && !live)
+    status = 'Research is inactive because this follow-up has ended.';
   return (
     <View>
       <Text style={styles.subtitle}>Public-web research</Text>
-      <Text style={styles.small}>
-        {value.enabled
-          ? 'Enabled for this commitment.'
-          : 'Off for this commitment.'}
-      </Text>
+      <Text style={styles.small}>{status}</Text>
       {coverage ? (
         <Text style={styles.small}>
           {coverage.coverage === 'unavailable'
@@ -143,7 +143,7 @@ export function CommitmentResearch({
           {new Date(coverage.checked_at * 1000).toLocaleString()}. Search does
           not cover the whole web.
         </Text>
-      ) : value.enabled ? (
+      ) : value.enabled && live ? (
         <Text style={styles.small}>Awaiting its first public-web check.</Text>
       ) : null}
       {live ? (

@@ -69,3 +69,26 @@ test('terminal route is fixed; credentials and arbitrary schemes cannot navigate
   ).toBe(false);
   expect(viewerNavigationAllowed('not a URL', origin)).toBe(false);
 });
+
+test.each(['Browser', 'Terminal'] as const)(
+  '%s preserves its playback and navigation boundary',
+  destination => {
+    const ui = render(
+      <LiveViewer
+        origin={origin}
+        destination={destination}
+        authenticated
+        foreground
+      />,
+    );
+    const tree = ui.toJSON() as unknown as { props: Record<string, unknown> };
+    expect(tree.props.mediaPlaybackRequiresUserAction).toBe(
+      destination !== 'Browser',
+    );
+    expect(tree.props.allowsInlineMediaPlayback).toBe(true);
+    expect(tree.props.mixedContentMode).toBe('never');
+    expect(tree.props.allowFileAccess).toBe(false);
+    expect(tree.props.javaScriptCanOpenWindowsAutomatically).toBe(false);
+    expect(tree.props.webviewDebuggingEnabled).toBeUndefined();
+  },
+);

@@ -29,7 +29,9 @@ export function LiveViewer({
       thirdPartyCookiesEnabled={false}
       mixedContentMode="never"
       allowsInlineMediaPlayback
-      mediaPlaybackRequiresUserAction
+      // The owner explicitly opens Browser. WKWebView otherwise blocks the
+      // silent worker-generated live track before it can load its first frame.
+      mediaPlaybackRequiresUserAction={destination !== 'Browser'}
       allowFileAccess={false}
       javaScriptCanOpenWindowsAutomatically={false}
       setSupportMultipleWindows

@@ -3,6 +3,7 @@ import { AppState, ScrollView } from 'react-native';
 import {
   act,
   fireEvent,
+  fireEventAsync,
   renderAsync,
   waitFor,
   within,
@@ -71,11 +72,17 @@ test('notification controls preserve consent, verify a tapped target, and revoke
       listener.state('off');
     }),
     enable: jest.fn(async () => callbacks.state('on')),
-    failureDescription: () => 'Notification setup could not be confirmed. Retry when connected.',
+    failureDescription: () =>
+      'Notification setup could not be confirmed. Retry when connected.',
+    commitmentNotificationsEnabled: () => false,
+    setCommitmentNotifications: jest.fn(async () => undefined),
     disable: jest.fn(async () => callbacks.state('off')),
     disconnect: jest.fn(),
   };
-  const f = await fixture(info, notifications as unknown as NotificationConnection);
+  const f = await fixture(
+    info,
+    notifications as unknown as NotificationConnection,
+  );
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   fireEvent.press(f.ui.getByText('Settings'));
   fireEvent.press(f.ui.getByText('Enable reply notifications'));
@@ -376,7 +383,10 @@ test('logout invalidates the session immediately while notification cleanup is p
         }),
     ),
   };
-  const f = await fixture(info, notifications as unknown as NotificationConnection);
+  const f = await fixture(
+    info,
+    notifications as unknown as NotificationConnection,
+  );
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   fireEvent.press(f.ui.getByText('Settings'));
   fireEvent.press(f.ui.getByText('Sign out'));
@@ -395,16 +405,22 @@ test('sending from a notification returns to the current conversation', async ()
     }),
     disconnect: jest.fn(),
   };
-  const f = await fixture(info, notifications as unknown as NotificationConnection);
+  const f = await fixture(
+    info,
+    notifications as unknown as NotificationConnection,
+  );
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   await act(async () => callbacks.open(turn.request_id));
   await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
   expect(f.ui.getByText('Back to current conversation')).toBeTruthy();
-  fireEvent.changeText(
+  await fireEventAsync.changeText(
     f.ui.getByLabelText('Message Radhouse'),
     'Next question',
   );
-  fireEvent.press(f.ui.getByText('Send message'));
+  await waitFor(() =>
+    expect(f.ui.getByRole('button', { name: 'Send message' })).toBeEnabled(),
+  );
+  await fireEventAsync.press(f.ui.getByText('Send message'));
   await waitFor(() =>
     expect(f.ui.queryByText('Back to current conversation')).toBeNull(),
   );

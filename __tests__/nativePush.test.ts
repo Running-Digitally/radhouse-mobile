@@ -27,7 +27,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getApps).mockReturnValue([{}] as ReturnType<typeof getApps>);
   jest.mocked(requestPushPermission).mockResolvedValue(true);
-  NativeModules.RadhouseHTTP = { prepareApplePush: jest.fn(async () => 'ab'.repeat(32)) };
+  NativeModules.RadhouseHTTP = {
+    prepareApplePush: jest.fn(async () => 'ab'.repeat(32)),
+  };
   jest.mocked(messaging.register).mockImplementation(async () => {
     const callback = jest.mocked(messaging.onRegistered).mock.calls.at(-1)![1];
     if (typeof callback === 'function') {
@@ -271,31 +273,48 @@ test('enabled is reported only after the server acknowledges the initial FID', a
   await push.disable();
 });
 
-
 test('waits for the real Apple callback before registering Firebase', async () => {
   let finish!: () => void;
   NativeModules.RadhouseHTTP.prepareApplePush.mockImplementationOnce(
-    () => new Promise<string>(resolve => { finish = () => resolve('ab'.repeat(32)); }),
+    () =>
+      new Promise<string>(resolve => {
+        finish = () => resolve('ab'.repeat(32));
+      }),
   );
   const push = new NativePush();
   const backend = registration();
   const enabling = push.enable(backend, jest.fn());
-  for (let i = 0; i < 16; i++) { await Promise.resolve(); }
+  for (let i = 0; i < 16; i++) {
+    await Promise.resolve();
+  }
   expect(messaging.register).not.toHaveBeenCalled();
   expect(backend.register).not.toHaveBeenCalled();
   finish();
   expect(await enabling).toBe('allowed');
-  expect(backend.register).toHaveBeenCalledWith('cSyntheticInstallationID', 'ios');
-  expect(messaging.setAPNSToken).toHaveBeenCalledWith(expect.anything(), 'ab'.repeat(32), 'unknown');
-  expect(jest.mocked(messaging.setAPNSToken).mock.invocationCallOrder[0]).toBeLessThan(jest.mocked(messaging.register).mock.invocationCallOrder[0]);
+  expect(backend.register).toHaveBeenCalledWith(
+    'cSyntheticInstallationID',
+    'ios',
+  );
+  expect(messaging.setAPNSToken).toHaveBeenCalledWith(
+    expect.anything(),
+    'ab'.repeat(32),
+    'unknown',
+  );
+  expect(
+    jest.mocked(messaging.setAPNSToken).mock.invocationCallOrder[0],
+  ).toBeLessThan(jest.mocked(messaging.register).mock.invocationCallOrder[0]);
   await push.disable();
 });
 
 test('Apple timeout is distinct from Firebase failure and a retry requests a new callback', async () => {
-  NativeModules.RadhouseHTTP.prepareApplePush.mockRejectedValueOnce(new Error('native timeout'));
+  NativeModules.RadhouseHTTP.prepareApplePush.mockRejectedValueOnce(
+    new Error('native timeout'),
+  );
   const push = new NativePush();
   const backend = registration();
-  await expect(push.enable(backend, jest.fn())).rejects.toEqual(new PushSetupError('apple'));
+  await expect(push.enable(backend, jest.fn())).rejects.toEqual(
+    new PushSetupError('apple'),
+  );
   expect(messaging.register).not.toHaveBeenCalled();
   expect(backend.register).not.toHaveBeenCalled();
   expect(await push.enable(backend, jest.fn())).toBe('allowed');
@@ -307,8 +326,12 @@ test('failed previous cleanup is distinct and does not start a new Apple registr
   const push = new NativePush();
   const backend = registration();
   await push.enable(backend, jest.fn());
-  backend.unregister.mockRejectedValueOnce(new Error('private transport details'));
-  await expect(push.enable(backend, jest.fn())).rejects.toEqual(new PushSetupError('cleanup'));
+  backend.unregister.mockRejectedValueOnce(
+    new Error('private transport details'),
+  );
+  await expect(push.enable(backend, jest.fn())).rejects.toEqual(
+    new PushSetupError('cleanup'),
+  );
   expect(NativeModules.RadhouseHTTP.prepareApplePush).toHaveBeenCalledTimes(1);
   await push.disable();
 });
@@ -320,8 +343,41 @@ test('failed later FID rotation still notifies the connection', async () => {
   await push.enable(backend, failure);
   backend.register.mockRejectedValueOnce(new Error('offline'));
   const callback = jest.mocked(messaging.onRegistered).mock.calls.at(-1)![1];
-  if (typeof callback === 'function') { callback('cRotatedInstallationID'); }
-  for (let i = 0; i < 16; i++) { await Promise.resolve(); }
+  if (typeof callback === 'function') {
+    callback('cRotatedInstallationID');
+  }
+  for (let i = 0; i < 16; i++) {
+    await Promise.resolve();
+  }
   expect(failure).toHaveBeenCalledTimes(1);
   await push.disable();
+});
+
+test('native delivery accepts proactive payloads in foreground, background tap and cold start', async () => {
+  const suggestion = {
+    version: '2',
+    kind: 'commitment_ready',
+    event_id: payload.event_id,
+    item_id: payload.request_id,
+  };
+  jest
+    .mocked(messaging.getInitialNotification)
+    .mockResolvedValueOnce({ data: suggestion });
+  const push = new NativePush();
+  const open = jest.fn(),
+    foreground = jest.fn();
+  const stop = push.listen(open, foreground);
+  await Promise.resolve();
+  expect(open).toHaveBeenCalledWith(suggestion);
+  jest.mocked(messaging.onMessage).mock.calls[0][1]({ data: suggestion });
+  expect(foreground).toHaveBeenCalledWith(suggestion);
+  jest
+    .mocked(messaging.onNotificationOpenedApp)
+    .mock.calls[0][1]({ data: suggestion });
+  expect(open).toHaveBeenCalledTimes(2);
+  jest
+    .mocked(messaging.onMessage)
+    .mock.calls[0][1]({ data: { ...suggestion, url: 'https://foreign.test' } });
+  expect(foreground).toHaveBeenCalledTimes(1);
+  stop();
 });

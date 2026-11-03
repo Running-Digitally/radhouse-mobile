@@ -4,6 +4,13 @@ export interface ReplyNotification {
   event_id: string;
   request_id: string;
 }
+export interface CommitmentNotification {
+  version: '2';
+  kind: 'commitment_ready';
+  event_id: string;
+  item_id: string;
+}
+export type AgentNotification = ReplyNotification | CommitmentNotification;
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fields = new Set(['version', 'kind', 'event_id', 'request_id']);
@@ -32,15 +39,39 @@ export function replyNotification(value: unknown): ReplyNotification | null {
     request_id: data.request_id,
   };
 }
+export function agentNotification(value: unknown): AgentNotification | null {
+  const reply = replyNotification(value);
+  if (reply) return reply;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (
+    Object.keys(data).sort().join(',') !== 'event_id,item_id,kind,version' ||
+    data.version !== '2' ||
+    data.kind !== 'commitment_ready' ||
+    typeof data.event_id !== 'string' ||
+    !uuid.test(data.event_id) ||
+    typeof data.item_id !== 'string' ||
+    !uuid.test(data.item_id)
+  )
+    return null;
+  return {
+    version: '2',
+    kind: 'commitment_ready',
+    event_id: data.event_id,
+    item_id: data.item_id,
+  };
+}
 export interface NotificationDestination {
   ownsRequest(requestId: string): Promise<boolean>;
   openRequest(requestId: string): void;
+  ownsCommitment?(itemId: string): Promise<boolean>;
+  openCommitment?(itemId: string): void;
 }
 /** A push is an untrusted hint; an authenticated server read authorizes its target. */
 export class NotificationRouter {
   private epoch = 0;
   private readonly seen = new Set<string>();
-  private pending: ReplyNotification | null = null;
+  private pending: AgentNotification | null = null;
   private destination: NotificationDestination | null = null;
   private readonly checking = new Set<string>();
 
@@ -61,7 +92,7 @@ export class NotificationRouter {
     this.checking.clear();
   }
   async receive(value: unknown): Promise<boolean> {
-    const notification = replyNotification(value);
+    const notification = agentNotification(value);
     if (!notification || this.seen.has(notification.event_id)) {
       return false;
     }
@@ -71,7 +102,7 @@ export class NotificationRouter {
     }
     return this.open(notification);
   }
-  private async open(notification: ReplyNotification): Promise<boolean> {
+  private async open(notification: AgentNotification): Promise<boolean> {
     const destination = this.destination;
     const epoch = this.epoch;
     const key = `${epoch}:${notification.event_id}`;
@@ -80,7 +111,13 @@ export class NotificationRouter {
     }
     this.checking.add(key);
     try {
-      const allowed = await destination.ownsRequest(notification.request_id);
+      const allowed =
+        notification.kind === 'commitment_ready'
+          ? Boolean(
+              destination.openCommitment &&
+                (await destination.ownsCommitment?.(notification.item_id)),
+            )
+          : await destination.ownsRequest(notification.request_id);
       if (
         !allowed ||
         epoch !== this.epoch ||
@@ -95,7 +132,9 @@ export class NotificationRouter {
           this.seen.delete(oldest);
         }
       }
-      destination.openRequest(notification.request_id);
+      if (notification.kind === 'commitment_ready')
+        destination.openCommitment?.(notification.item_id);
+      else destination.openRequest(notification.request_id);
       return true;
     } catch {
       // A failed read never authorizes navigation. A later tap may retry it.

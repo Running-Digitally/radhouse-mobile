@@ -1,7 +1,10 @@
 import { NotificationConnection } from '../src/notifications/connection';
 import { SessionClient } from '../src/auth/client';
 import { NativePush, PushSetupError } from '../src/notifications/nativePush';
-import { ReplyNotification } from '../src/notifications/payload';
+import {
+  AgentNotification,
+  ReplyNotification,
+} from '../src/notifications/payload';
 import { SessionError } from '../src/auth/types';
 const id = '58e8f3dd-cd82-48a4-9df9-63c3a15b310f';
 const payload: ReplyNotification = {
@@ -22,8 +25,8 @@ function fixture(raw: string | null = null) {
     })),
     read: jest.fn(async () => ({ turn: { request_id: id } })),
   };
-  let open!: (data: ReplyNotification) => void;
-  let foreground!: (data: ReplyNotification) => void;
+  let open!: (data: AgentNotification) => void;
+  let foreground!: (data: AgentNotification) => void;
   const stop = jest.fn();
   const native = {
     configured: jest.fn(() => true),
@@ -53,7 +56,7 @@ function fixture(raw: string | null = null) {
     listener,
     stop,
     open: () => open(payload),
-    foreground: () => foreground(payload),
+    foreground: (data: AgentNotification = payload) => foreground(data),
   };
 }
 
@@ -68,6 +71,21 @@ test('fresh preferences require opt-in; enable and opt-out persist device-only c
   await f.connection.disable();
   expect(f.storage.save).toHaveBeenLastCalledWith(pref(false));
   expect(f.native.disable).toHaveBeenCalledTimes(1);
+});
+
+test('proactive delivery requires a separate opt-in and compatible destination', async () => {
+  const f = fixture(pref());
+  await f.connection.connect('owner', {
+    ...f.listener,
+    openCommitment: jest.fn(),
+  });
+  expect(f.connection.commitmentNotificationsEnabled()).toBe(false);
+  await f.connection.setCommitmentNotifications(true);
+  expect(f.client.pushRegistration).toHaveBeenLastCalledWith(id, true);
+  expect(f.connection.commitmentNotificationsEnabled()).toBe(true);
+  await f.connection.setCommitmentNotifications(false);
+  expect(f.client.pushRegistration).toHaveBeenLastCalledWith(id);
+  expect(f.connection.commitmentNotificationsEnabled()).toBe(false);
 });
 test('saved consent resumes registration; notification target requires authenticated ownership', async () => {
   const f = fixture(pref());
@@ -162,20 +180,44 @@ test('offline target or target from a prior session never opens private content'
   expect(f.listener.state).toHaveBeenLastCalledWith('error');
 });
 
-test.each(['apple', 'firebase', 'server', 'cleanup'] as const)('setup exposes a safe %s failure and clears it on retry', async stage => {
-  const f = fixture();
-  await f.connection.connect('owner', f.listener);
-  f.native.enable.mockRejectedValueOnce(new PushSetupError(stage));
-  await expect(f.connection.enable()).rejects.toEqual(new PushSetupError(stage));
-  expect(f.listener.state).toHaveBeenLastCalledWith('error');
-  const descriptions = {
-    cleanup: 'Previous notification registration could not be cleared. Please retry.',
-    apple: 'Apple notification registration did not complete. Please retry.',
-    firebase: 'Notification delivery registration did not complete. Please retry.',
-    server: 'Radhouse could not save notification registration. Please retry.',
-  };
-  expect(f.connection.failureDescription()).toBe(descriptions[stage]);
-  await f.connection.enable();
-  expect(f.listener.state).toHaveBeenLastCalledWith('on');
-  expect(f.connection.failureDescription()).toBe('Notification setup could not be confirmed. Retry when connected.');
+test.each(['apple', 'firebase', 'server', 'cleanup'] as const)(
+  'setup exposes a safe %s failure and clears it on retry',
+  async stage => {
+    const f = fixture();
+    await f.connection.connect('owner', f.listener);
+    f.native.enable.mockRejectedValueOnce(new PushSetupError(stage));
+    await expect(f.connection.enable()).rejects.toEqual(
+      new PushSetupError(stage),
+    );
+    expect(f.listener.state).toHaveBeenLastCalledWith('error');
+    const descriptions = {
+      cleanup:
+        'Previous notification registration could not be cleared. Please retry.',
+      apple: 'Apple notification registration did not complete. Please retry.',
+      firebase:
+        'Notification delivery registration did not complete. Please retry.',
+      server:
+        'Radhouse could not save notification registration. Please retry.',
+    };
+    expect(f.connection.failureDescription()).toBe(descriptions[stage]);
+    await f.connection.enable();
+    expect(f.listener.state).toHaveBeenLastCalledWith('on');
+    expect(f.connection.failureDescription()).toBe(
+      'Notification setup could not be confirmed. Retry when connected.',
+    );
+  },
+);
+
+test('a foreground suggestion does not pretend a chat reply arrived', async () => {
+  const f = fixture(pref());
+  const foregroundCommitment = jest.fn();
+  await f.connection.connect('owner', { ...f.listener, foregroundCommitment });
+  f.foreground({
+    version: '2',
+    kind: 'commitment_ready',
+    item_id: id,
+    event_id: id,
+  });
+  expect(foregroundCommitment).toHaveBeenCalledTimes(1);
+  expect(f.listener.foreground).not.toHaveBeenCalled();
 });

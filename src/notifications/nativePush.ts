@@ -11,7 +11,7 @@ import {
 } from '@react-native-firebase/messaging';
 import { NativeModules, Platform } from 'react-native';
 import { requestPushPermission } from './permission';
-import { replyNotification, ReplyNotification } from './payload';
+import { agentNotification, AgentNotification } from './payload';
 
 export class PushSetupError extends Error {
   constructor(readonly stage: 'apple' | 'firebase' | 'server' | 'cleanup') {
@@ -81,11 +81,14 @@ export class NativePush {
   }
 
   private async prepareAPNs(
-    messaging: ReturnType<typeof getMessaging>, epoch: number,
+    messaging: ReturnType<typeof getMessaging>,
+    epoch: number,
   ): Promise<void> {
     try {
       const token: string = await NativeModules.RadhouseHTTP.prepareApplePush();
-      if (epoch !== this.epoch) { return; }
+      if (epoch !== this.epoch) {
+        return;
+      }
       // Keep the callback token in memory only; the existing SDK validates its encoding.
       await setAPNSToken(messaging, token, 'unknown');
     } catch {
@@ -127,7 +130,9 @@ export class NativePush {
           this.register(fid, epoch, registration).then(
             () => finish(epoch === this.epoch),
             () => {
-              if (settled) { onFailure(); }
+              if (settled) {
+                onFailure();
+              }
               finish(false, new PushSetupError('server'));
             },
           );
@@ -162,8 +167,8 @@ export class NativePush {
     return this.updates;
   }
   listen(
-    open: (data: ReplyNotification) => void,
-    foreground: (data: ReplyNotification) => void,
+    open: (data: AgentNotification) => void,
+    foreground: (data: AgentNotification) => void,
   ): () => void {
     if (!this.configured()) {
       return () => undefined;
@@ -172,9 +177,9 @@ export class NativePush {
     let active = true;
     const emit = (
       value: unknown,
-      callback: (data: ReplyNotification) => void,
+      callback: (data: AgentNotification) => void,
     ) => {
-      const payload = replyNotification(value);
+      const payload = agentNotification(value);
       if (active && payload) {
         callback(payload);
       }

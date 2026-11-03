@@ -69,6 +69,21 @@ test('fresh preferences require opt-in; enable and opt-out persist device-only c
   expect(f.storage.save).toHaveBeenLastCalledWith(pref(false));
   expect(f.native.disable).toHaveBeenCalledTimes(1);
 });
+
+test('proactive delivery requires a separate opt-in and compatible destination', async () => {
+  const f = fixture(pref());
+  await f.connection.connect('owner', {
+    ...f.listener,
+    openCommitment: jest.fn(),
+  });
+  expect(f.connection.commitmentNotificationsEnabled()).toBe(false);
+  await f.connection.setCommitmentNotifications(true);
+  expect(f.client.pushRegistration).toHaveBeenLastCalledWith(id, true);
+  expect(f.connection.commitmentNotificationsEnabled()).toBe(true);
+  await f.connection.setCommitmentNotifications(false);
+  expect(f.client.pushRegistration).toHaveBeenLastCalledWith(id);
+  expect(f.connection.commitmentNotificationsEnabled()).toBe(false);
+});
 test('saved consent resumes registration; notification target requires authenticated ownership', async () => {
   const f = fixture(pref());
   await f.connection.connect('owner', f.listener);
@@ -162,20 +177,30 @@ test('offline target or target from a prior session never opens private content'
   expect(f.listener.state).toHaveBeenLastCalledWith('error');
 });
 
-test.each(['apple', 'firebase', 'server', 'cleanup'] as const)('setup exposes a safe %s failure and clears it on retry', async stage => {
-  const f = fixture();
-  await f.connection.connect('owner', f.listener);
-  f.native.enable.mockRejectedValueOnce(new PushSetupError(stage));
-  await expect(f.connection.enable()).rejects.toEqual(new PushSetupError(stage));
-  expect(f.listener.state).toHaveBeenLastCalledWith('error');
-  const descriptions = {
-    cleanup: 'Previous notification registration could not be cleared. Please retry.',
-    apple: 'Apple notification registration did not complete. Please retry.',
-    firebase: 'Notification delivery registration did not complete. Please retry.',
-    server: 'Radhouse could not save notification registration. Please retry.',
-  };
-  expect(f.connection.failureDescription()).toBe(descriptions[stage]);
-  await f.connection.enable();
-  expect(f.listener.state).toHaveBeenLastCalledWith('on');
-  expect(f.connection.failureDescription()).toBe('Notification setup could not be confirmed. Retry when connected.');
-});
+test.each(['apple', 'firebase', 'server', 'cleanup'] as const)(
+  'setup exposes a safe %s failure and clears it on retry',
+  async stage => {
+    const f = fixture();
+    await f.connection.connect('owner', f.listener);
+    f.native.enable.mockRejectedValueOnce(new PushSetupError(stage));
+    await expect(f.connection.enable()).rejects.toEqual(
+      new PushSetupError(stage),
+    );
+    expect(f.listener.state).toHaveBeenLastCalledWith('error');
+    const descriptions = {
+      cleanup:
+        'Previous notification registration could not be cleared. Please retry.',
+      apple: 'Apple notification registration did not complete. Please retry.',
+      firebase:
+        'Notification delivery registration did not complete. Please retry.',
+      server:
+        'Radhouse could not save notification registration. Please retry.',
+    };
+    expect(f.connection.failureDescription()).toBe(descriptions[stage]);
+    await f.connection.enable();
+    expect(f.listener.state).toHaveBeenLastCalledWith('on');
+    expect(f.connection.failureDescription()).toBe(
+      'Notification setup could not be confirmed. Retry when connected.',
+    );
+  },
+);

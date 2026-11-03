@@ -13,10 +13,16 @@ export interface PreferenceStore {
   load(): Promise<string | null>;
   save(value: string): Promise<unknown>;
 }
-type Preference = { installation: string; username: string; enabled: boolean };
+type Preference = {
+  installation: string;
+  username: string;
+  enabled: boolean;
+  commitments?: boolean;
+};
 type Listener = {
   state: (value: NotificationState) => void;
   open: (requestId: string) => void;
+  openCommitment?: (itemId: string) => void;
   foreground: () => void;
 };
 
@@ -31,11 +37,16 @@ export class NotificationConnection {
   private setupFailure: PushSetupError['stage'] | null = null;
   failureDescription(): string {
     switch (this.setupFailure) {
-      case 'cleanup': return 'Previous notification registration could not be cleared. Please retry.';
-      case 'apple': return 'Apple notification registration did not complete. Please retry.';
-      case 'firebase': return 'Notification delivery registration did not complete. Please retry.';
-      case 'server': return 'Radhouse could not save notification registration. Please retry.';
-      default: return 'Notification setup could not be confirmed. Retry when connected.';
+      case 'cleanup':
+        return 'Previous notification registration could not be cleared. Please retry.';
+      case 'apple':
+        return 'Apple notification registration did not complete. Please retry.';
+      case 'firebase':
+        return 'Notification delivery registration did not complete. Please retry.';
+      case 'server':
+        return 'Radhouse could not save notification registration. Please retry.';
+      default:
+        return 'Notification setup could not be confirmed. Retry when connected.';
     }
   }
   constructor(
@@ -82,6 +93,15 @@ export class NotificationConnection {
         }
       },
       openRequest: id => this.listener?.open(id),
+      ownsCommitment: async id => {
+        if (!this.listener?.openCommitment) return false;
+        const result = await this.client.read(
+          '/chat/responsibilities/commitments/' + id,
+        );
+        const item = result.item as { id?: unknown } | undefined;
+        return item?.id === id;
+      },
+      openCommitment: id => this.listener?.openCommitment?.(id),
     });
     try {
       await this.writes.catch(() => undefined);
@@ -101,7 +121,8 @@ export class NotificationConnection {
       }
     } catch (error) {
       if (epoch === this.epoch) {
-        this.setupFailure = error instanceof PushSetupError ? error.stage : null;
+        this.setupFailure =
+          error instanceof PushSetupError ? error.stage : null;
         this.report('error');
       }
       if (!(error instanceof SessionError && error.kind === 'cancelled')) {
@@ -116,6 +137,8 @@ export class NotificationConnection {
         value &&
         typeof value.username === 'string' &&
         typeof value.enabled === 'boolean' &&
+        (value.commitments === undefined ||
+          typeof value.commitments === 'boolean') &&
         /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
           value.installation,
         )
@@ -143,7 +166,9 @@ export class NotificationConnection {
           : await this.client.newRequestId();
       this.current(epoch);
       const allowed = await this.native.enable(
-        this.client.pushRegistration(installation),
+        this.preference?.commitments === true
+          ? this.client.pushRegistration(installation, true)
+          : this.client.pushRegistration(installation),
         () => {
           if (epoch === this.epoch) {
             this.report('error');
@@ -155,12 +180,14 @@ export class NotificationConnection {
         installation,
         username: this.username,
         enabled: allowed === 'allowed',
+        ...(this.preference?.commitments === true ? { commitments: true } : {}),
       });
       this.current(epoch);
       this.report(allowed === 'allowed' ? 'on' : 'off');
     } catch (error) {
       if (epoch === this.epoch) {
-        this.setupFailure = error instanceof PushSetupError ? error.stage : null;
+        this.setupFailure =
+          error instanceof PushSetupError ? error.stage : null;
         this.report('error');
       }
       throw error;
@@ -182,6 +209,20 @@ export class NotificationConnection {
       this.report('error');
       throw error;
     }
+  }
+  commitmentNotificationsEnabled(): boolean {
+    return (
+      this.preference?.enabled === true && this.preference.commitments === true
+    );
+  }
+  async setCommitmentNotifications(enabled: boolean) {
+    if (!this.preference || !this.listener?.openCommitment)
+      throw new SessionError('unsupported');
+    await this.persist({
+      ...this.preference,
+      commitments: enabled ? true : undefined,
+    });
+    await this.enable();
   }
   disconnect() {
     this.epoch++;

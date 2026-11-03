@@ -17,6 +17,7 @@ import { ORIGIN, object } from '../auth/transfer';
 import { TabBar } from '../components/TabBar';
 import { LiveViewer } from '../components/LiveViewer';
 import { Action } from '../components/Action';
+import { Commitments } from '../components/Commitments';
 import { styles } from '../theme';
 import { Conversation } from '../chat/Conversation';
 import { ModelPicker } from '../chat/ModelPicker';
@@ -140,6 +141,8 @@ export function Connected({
     null,
   );
   const [replyReady, setReplyReady] = useState(false);
+  const [commitmentsOpen, setCommitmentsOpen] = useState(false);
+  const [commitmentFocus, setCommitmentFocus] = useState<string | null>(null);
   const [active, setActive] = useState(AppState.currentState === 'active');
   const busyRef = useRef(false);
   const pollingRef = useRef(false);
@@ -295,6 +298,14 @@ export function Connected({
             return;
           }
           setNotificationRequest(id);
+          setCommitmentsOpen(false);
+          setDestination('Chat');
+        },
+        openCommitment: id => {
+          if (!attached) return;
+          setCommitmentFocus(id);
+          setCommitmentsOpen(true);
+          setNotificationRequest(null);
           setDestination('Chat');
         },
       })
@@ -502,6 +513,8 @@ export function Connected({
     historyInitialized.current = false;
     latestWindow.current = [];
     setNotificationRequest(null);
+    setCommitmentsOpen(false);
+    setCommitmentFocus(null);
     setReplyReady(false);
     setPassword('');
     setCode('');
@@ -706,7 +719,20 @@ export function Connected({
           active={active}
         />
       )}
-      {step === 'workspace' && destination === 'Chat' && (
+      {step === 'workspace' && destination === 'Chat' && commitmentsOpen && (
+        <ScrollView contentContainerStyle={styles.page}>
+          <Commitments
+            client={client}
+            focusId={commitmentFocus}
+            onClose={() => setCommitmentsOpen(false)}
+            onSource={id => {
+              setCommitmentsOpen(false);
+              setNotificationRequest(id);
+            }}
+          />
+        </ScrollView>
+      )}
+      {step === 'workspace' && destination === 'Chat' && !commitmentsOpen && (
         <>
           <Conversation
             turns={turns}
@@ -771,6 +797,15 @@ export function Connected({
         <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.title}>Your connection.</Text>
           <Text style={styles.body}>Signed in as {info?.username}</Text>
+          <Action
+            title="Responsibilities"
+            secondary
+            onPress={() => {
+              setCommitmentFocus(null);
+              setCommitmentsOpen(true);
+              setDestination('Chat');
+            }}
+          />
           <Text style={styles.subtitle}>
             {notificationState === 'error' && notifications
               ? notifications.failureDescription()
@@ -803,6 +838,29 @@ export function Connected({
                   .catch(() => setNotificationState('error'));
               }}
             />
+          )}
+          {notifications && notificationState === 'on' && (
+            <>
+              <Text style={styles.small}>
+                Agent suggestions have separate notification consent. Quiet
+                hours and the responsibility's scope still apply.
+              </Text>
+              <Action
+                title={
+                  notifications.commitmentNotificationsEnabled()
+                    ? 'Turn off agent suggestion notifications'
+                    : 'Notify me about agent suggestions'
+                }
+                secondary
+                onPress={() =>
+                  notifications
+                    .setCommitmentNotifications(
+                      !notifications.commitmentNotificationsEnabled(),
+                    )
+                    .catch(() => setNotificationState('error'))
+                }
+              />
+            </>
           )}
           <Action title="Sign out" secondary onPress={signOut} />
         </ScrollView>

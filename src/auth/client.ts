@@ -334,7 +334,8 @@ export class SessionClient {
     if (
       !readablePaths.has(path) &&
       !/^\/chat\/history\?before=[1-9]\d{0,12}$/.test(path) &&
-      !/^\/chat\/messages\/[a-f0-9-]{36}$/.test(path)
+      !/^\/chat\/messages\/[a-f0-9-]{36}$/.test(path) &&
+      !/^\/chat\/responsibilities\/commitments(?:\/[a-f0-9-]{36})?$/.test(path)
     ) {
       throw new SessionError('invalid');
     }
@@ -399,7 +400,41 @@ export class SessionClient {
       throw error;
     }
   }
-  pushRegistration(installation: string): PushRegistration {
+  async commitmentDecision(
+    identifier: string,
+    decision: 'confirmed' | 'dismissed',
+  ) {
+    if (
+      !/^[a-f0-9-]{36}$/.test(identifier) ||
+      !['confirmed', 'dismissed'].includes(decision)
+    )
+      throw new SessionError('invalid');
+    if (!this.credentials.local) throw new SessionError('expired');
+    return (
+      await this.json(
+        '/chat/responsibilities/commitments/' + identifier,
+        this.credentials,
+        'POST',
+        { decision },
+      )
+    ).data;
+  }
+  async commitmentControl(active: boolean) {
+    if (typeof active !== 'boolean') throw new SessionError('invalid');
+    if (!this.credentials.local) throw new SessionError('expired');
+    return (
+      await this.json(
+        '/chat/responsibilities/commitments',
+        this.credentials,
+        'POST',
+        { active },
+      )
+    ).data;
+  }
+  pushRegistration(
+    installation: string,
+    commitments = false,
+  ): PushRegistration {
     if (
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
         installation,
@@ -423,7 +458,18 @@ export class SessionClient {
         if (!/^[A-Za-z0-9_:.-]{20,4096}$/.test(token)) {
           throw new SessionError('invalid');
         }
-        await change('PUT', { token, platform });
+        if (commitments) {
+          const { data } = await this.json(
+            '/chat/push/status',
+            this.credentials,
+          );
+          if (data.commitments !== true) throw new SessionError('unsupported');
+        }
+        await change('PUT', {
+          token,
+          platform,
+          ...(commitments ? { commitments: true } : {}),
+        });
       },
       unregister: async () => {
         // Cleanup stays bound to the original session even after a new login.

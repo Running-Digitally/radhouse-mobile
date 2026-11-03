@@ -3,6 +3,7 @@ import {
   AppState,
   Keyboard,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -16,6 +17,7 @@ import {
 import { ORIGIN, object } from '../auth/transfer';
 import { TabBar } from '../components/TabBar';
 import { LiveViewer } from '../components/LiveViewer';
+import { NativeBrowser } from '../browser/NativeBrowser';
 import { Action } from '../components/Action';
 import { Commitments } from '../components/Commitments';
 import { styles } from '../theme';
@@ -32,6 +34,7 @@ export { readTurns } from '../chat/transcript';
 import { Destination } from '../workspace';
 
 type LiveFile = { id: string; name: string; kind: string };
+const browserStyles = StyleSheet.create({ hidden: { display: 'none' } });
 function readFiles(value: unknown): LiveFile[] {
   if (!Array.isArray(value) || value.length > 100) {
     throw new SessionError('invalid');
@@ -86,11 +89,10 @@ function WorkspaceViewer({
   info: SessionInfo | null;
   active: boolean;
 }>) {
-  if (destination !== 'Browser' && destination !== 'Terminal') {
+  if (destination !== 'Terminal') {
     return null;
   }
-  const feature = destination === 'Browser' ? 'browser_streaming' : 'terminal';
-  if (!info?.features[feature]) {
+  if (!info?.features.terminal) {
     return (
       <Text style={styles.subtitle}>
         This feature is unavailable on your server.
@@ -121,6 +123,7 @@ export function Connected({
   >('restore');
   const [info, setInfo] = useState<SessionInfo | null>(null);
   const [destination, setDestination] = useState<Destination>('Chat');
+  const [browserTab, setBrowserTab] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -163,6 +166,24 @@ export function Connected({
   const activeRef = useRef(active);
   const signingOut = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    let current = true;
+    setBrowserTab(null);
+    if (step === 'workspace') {
+      client
+        .newRequestId()
+        .then(id => {
+          if (current) setBrowserTab(id);
+        })
+        .catch(() => {
+          if (current)
+            setError('The browser connection could not be prepared.');
+        });
+    }
+    return () => {
+      current = false;
+    };
+  }, [client, step]);
   useEffect(() => {
     retainedTurns.current = turns;
   }, [turns]);
@@ -725,6 +746,34 @@ export function Connected({
           active={active}
         />
       )}
+      {step === 'workspace' &&
+        verified &&
+        info?.features.browser_streaming &&
+        browserTab &&
+        (destination === 'Browser' ||
+          (destination === 'Chat' && !commitmentsOpen)) && (
+          <NativeBrowser
+            origin={ORIGIN}
+            tab={browserTab}
+            full={destination === 'Browser'}
+            compact={keyboardVisible}
+            expand={() => {
+              Keyboard.dismiss();
+              setDestination('Browser');
+            }}
+            back={() => {
+              Keyboard.dismiss();
+              setDestination('Chat');
+            }}
+            onExpired={() => {
+              expireSession();
+            }}
+            onReturned={() => {
+              setDestination('Chat');
+              run(refresh);
+            }}
+          />
+        )}
       {step === 'workspace' && suggestionReady && (
         <Action
           title="Review a new Radhouse suggestion"
@@ -737,6 +786,13 @@ export function Connected({
           }}
         />
       )}
+      {step === 'workspace' &&
+        destination === 'Browser' &&
+        !info?.features.browser_streaming && (
+          <Text style={styles.subtitle}>
+            The browser is unavailable on your server.
+          </Text>
+        )}
       {step === 'workspace' && destination === 'Chat' && commitmentsOpen && (
         <ScrollView contentContainerStyle={styles.page}>
           <Commitments
@@ -750,48 +806,55 @@ export function Connected({
           />
         </ScrollView>
       )}
-      {step === 'workspace' && destination === 'Chat' && !commitmentsOpen && (
-        <>
-          <Conversation
-            turns={turns}
-            text={text}
-            setText={setText}
-            pending={pending}
-            busy={busy}
-            send={() => run(send)}
-            refresh={() => run(refresh)}
-            earlier={() => run(earlier)}
-            hasEarlier={Boolean(olderBefore) && !notificationRequest}
-            replyReady={replyReady}
-            notificationRequest={notificationRequest}
-            returnToCurrent={() => {
-              historyInitialized.current = false;
-              latestWindow.current = [];
-              setOlderBefore(null);
-              setNotificationRequest(null);
-              setReplyReady(false);
-              setTurns([]);
-            }}
-            selection={selection}
-            openModels={() => {
-              Keyboard.dismiss();
-              setModelsOpen(true);
-            }}
-            modelsAvailable={Boolean(info?.features.inference)}
-            selectionValid={selectionAvailable(catalog, selection)}
-          />
-          <ModelPicker
-            visible={modelsOpen}
-            close={() => setModelsOpen(false)}
-            catalog={catalog}
-            selection={selection}
-            select={setSelection}
-            refresh={() => loadModels(true)}
-            loading={modelsLoading}
-            error={modelError}
-          />
-        </>
-      )}
+      {step === 'workspace' &&
+        ['Chat', 'Browser'].includes(destination) &&
+        !commitmentsOpen && (
+          <View
+            style={[
+              styles.grow,
+              destination === 'Browser' && browserStyles.hidden,
+            ]}
+          >
+            <Conversation
+              turns={turns}
+              text={text}
+              setText={setText}
+              pending={pending}
+              busy={busy}
+              send={() => run(send)}
+              refresh={() => run(refresh)}
+              earlier={() => run(earlier)}
+              hasEarlier={Boolean(olderBefore) && !notificationRequest}
+              replyReady={replyReady}
+              notificationRequest={notificationRequest}
+              returnToCurrent={() => {
+                historyInitialized.current = false;
+                latestWindow.current = [];
+                setOlderBefore(null);
+                setNotificationRequest(null);
+                setReplyReady(false);
+                setTurns([]);
+              }}
+              selection={selection}
+              openModels={() => {
+                Keyboard.dismiss();
+                setModelsOpen(true);
+              }}
+              modelsAvailable={Boolean(info?.features.inference)}
+              selectionValid={selectionAvailable(catalog, selection)}
+            />
+            <ModelPicker
+              visible={modelsOpen}
+              close={() => setModelsOpen(false)}
+              catalog={catalog}
+              selection={selection}
+              select={setSelection}
+              refresh={() => loadModels(true)}
+              loading={modelsLoading}
+              error={modelError}
+            />
+          </View>
+        )}
       {step === 'workspace' && destination === 'Library' && (
         <ScrollView contentContainerStyle={styles.page}>
           <Text style={styles.title}>Your Library.</Text>

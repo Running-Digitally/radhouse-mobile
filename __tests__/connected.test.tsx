@@ -193,7 +193,7 @@ test.each(['unavailable', 'conflict'] as const)(
     }
     fireEvent.press(f.ui.getByText('Retry same message'));
     await waitFor(() => expect(f.ui.getByText('Send message')).toBeTruthy());
-    expect(f.client.newRequestId).toHaveBeenCalledTimes(1);
+    expect(f.client.newRequestId).toHaveBeenCalledTimes(2); // Browser tab and one message.
     expect(f.client.send.mock.calls[0]).toEqual(f.client.send.mock.calls[1]);
   },
 );
@@ -271,7 +271,7 @@ test('server capabilities prevent unavailable viewers and failed logout remains 
   await waitFor(() => expect(f.ui.getByText('Synthetic reply')).toBeTruthy());
   fireEvent.press(f.ui.getByText('Browser'));
   expect(
-    f.ui.getByText('This feature is unavailable on your server.'),
+    f.ui.getByText('The browser is unavailable on your server.'),
   ).toBeTruthy();
   await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
   fireEvent.press(f.ui.getByText('Settings'));

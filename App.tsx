@@ -55,10 +55,12 @@ function Workspace() {
   }
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={[appStyles.header, connected && appStyles.compactHeader]}>
-        <Text style={appStyles.brand}>radhouse</Text>
-        {!connected && <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>}
-      </View>
+      {!connected && (
+        <View style={appStyles.header}>
+          <Text style={appStyles.brand}>radhouse</Text>
+          <Text style={styles.eyebrow}>A PLACE TO RETURN TO</Text>
+        </View>
+      )}
       {connected && (
         <KeyboardAvoidingView
           style={styles.grow}
@@ -144,7 +146,6 @@ export default function App() {
 }
 const appStyles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingVertical: 18, gap: 6 },
-  compactHeader: { paddingVertical: 8 },
   brand: {
     fontSize: 27,
     fontWeight: '700',

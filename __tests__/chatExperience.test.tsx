@@ -124,7 +124,7 @@ test('connected controls show supported thinking, selected radio state, and free
     { provider: 'custom:openai', model: 'gpt-6.1-sol', thinking: 'max' },
   ]);
   expect(client.send.mock.calls[1]).toEqual(client.send.mock.calls[0]);
-  expect(client.newRequestId).toHaveBeenCalledTimes(1);
+  expect(client.newRequestId).toHaveBeenCalledTimes(2); // Browser tab and one message; retry keeps its ID.
 });
 
 test('unavailable selected model cannot silently fall back; Default recovers', async () => {
@@ -184,7 +184,7 @@ test('a definitive model admission rejection restores the draft and permits choo
   await waitFor(() =>
     expect(client.send).toHaveBeenLastCalledWith(id, 'Edited draft'),
   );
-  expect(client.newRequestId).toHaveBeenCalledTimes(2);
+  expect(client.newRequestId).toHaveBeenCalledTimes(3); // Browser tab plus two distinct messages.
 });
 
 test('resuming after more than a latest page reopens history pagination and removes stale working state', async () => {

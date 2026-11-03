@@ -87,6 +87,36 @@ permission denial, token rotation, revocation failures, stale asynchronous work,
 malformed notifications and authenticated navigation. These tests do not prove
 APNs/FCM delivery. See [push delivery](docs/push-delivery.md) for remaining work.
 
+## Native browser and live chat preview
+
+The browser screen uses native title/address controls, explicit takeover and
+handback, and a native tools sheet for privacy, navigation and reading zoom.
+Only the authenticated remote canvas is embedded. Chat shows a live, view-only
+mini browser while the agent is actively browsing. Expanding keeps the same
+browser tab and does not take control; returning preserves the chat draft and
+mounted conversation. The preview shrinks while the keyboard is visible.
+
+Private mode, session expiry and backgrounding remove the preview. Local reading
+zoom is view-only; fit the page before interacting. Reconnect refreshes the view
+without replaying browser actions. The remote page remains a fixed-size isolated
+desktop browser, not a native or responsive mobile page. Terminal retains its
+existing viewer. No owner browser profile or additional agent permissions are
+introduced.
+
+The bridge admits a fixed authenticated canvas and its owned stream only.
+Presentation messages carry bounded status, title and address fields, never
+session credentials or control leases. Android's origin-only bridge events are
+accepted only while that exact canvas is the loaded document. Native tests cover
+navigation restrictions, view-only expansion, privacy, uncertain actions,
+background removal and draft continuity. Chromium/WebKit canvas checks and
+simulator screenshots provide separate UI evidence; live deployment and physical
+phone acceptance remain release gates.
+
+Public research controls also run through the actual authenticated session
+client in integration tests, including explicit enable, saved revision refresh
+and independent revocation. Synthetic test data does not authorize research on
+an owner's commitment.
+
 ## Engineering contracts
 
 - [Mobile design and delivery slices](docs/mobile-design.md)

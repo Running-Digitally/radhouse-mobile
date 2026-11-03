@@ -10,7 +10,7 @@ export interface CommitmentNotification {
   event_id: string;
   item_id: string;
 }
-type AgentNotification = ReplyNotification | CommitmentNotification;
+export type AgentNotification = ReplyNotification | CommitmentNotification;
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const fields = new Set(['version', 'kind', 'event_id', 'request_id']);

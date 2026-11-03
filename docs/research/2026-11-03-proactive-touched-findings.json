@@ -1,0 +1,17 @@
+{
+  "retrieved": "2026-11-03",
+  "project": "Running-Digitally_radhouse-mobile",
+  "scope": [
+    "src/auth/client.ts",
+    "src/screens/Connected.tsx",
+    "src/notifications/connection.ts",
+    "src/notifications/payload.ts",
+    "src/notifications/nativePush.ts",
+    "__tests__/connected.test.tsx",
+    "__tests__/notificationConnection.test.ts",
+    "__tests__/nativePush.test.ts",
+    "__tests__/session.test.ts"
+  ],
+  "total": 0,
+  "issues": []
+}

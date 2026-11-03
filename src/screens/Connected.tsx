@@ -141,6 +141,7 @@ export function Connected({
     null,
   );
   const [replyReady, setReplyReady] = useState(false);
+  const [suggestionReady, setSuggestionReady] = useState(false);
   const [commitmentsOpen, setCommitmentsOpen] = useState(false);
   const [commitmentFocus, setCommitmentFocus] = useState<string | null>(null);
   const [active, setActive] = useState(AppState.currentState === 'active');
@@ -293,6 +294,9 @@ export function Connected({
             setReplyReady(true);
           }
         },
+        foregroundCommitment: () => {
+          if (attached) setSuggestionReady(true);
+        },
         open: id => {
           if (!attached) {
             return;
@@ -303,6 +307,7 @@ export function Connected({
         },
         openCommitment: id => {
           if (!attached) return;
+          setSuggestionReady(false);
           setCommitmentFocus(id);
           setCommitmentsOpen(true);
           setNotificationRequest(null);
@@ -515,6 +520,7 @@ export function Connected({
     setNotificationRequest(null);
     setCommitmentsOpen(false);
     setCommitmentFocus(null);
+    setSuggestionReady(false);
     setReplyReady(false);
     setPassword('');
     setCode('');
@@ -717,6 +723,18 @@ export function Connected({
           destination={destination}
           info={info}
           active={active}
+        />
+      )}
+      {step === 'workspace' && suggestionReady && (
+        <Action
+          title="Review a new Radhouse suggestion"
+          secondary
+          onPress={() => {
+            setSuggestionReady(false);
+            setCommitmentFocus(null);
+            setCommitmentsOpen(true);
+            setDestination('Chat');
+          }}
         />
       )}
       {step === 'workspace' && destination === 'Chat' && commitmentsOpen && (

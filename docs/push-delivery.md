@@ -165,3 +165,38 @@ messages. This repair does not change Android versioning or signing identity.
 JavaScript tests prove ordering and cancellation; a signed native archive proves
 compilation. Neither establishes physical APNs delivery, which remains a release
 acceptance check on the owner's iPhone.
+
+## Commitment suggestion candidate
+
+The `codex/native-proactive-agent` source adds separate, explicit **agent
+suggestion** notification consent. It does not change an existing device's reply
+consent into consent for proactive alerts. Registration sends `commitments:true`
+only after opt-in and only when `/chat/push/status` advertises support. The
+preference remains in device-only secure storage and is re-established under a
+current session. Disabling it updates backend consent and discards pending
+suggestion notices while preserving reply delivery.
+
+A version 2 payload has exactly `version:"2"`, `kind:"commitment_ready"`,
+`event_id`, and `item_id`. UUID validation rejects arbitrary paths, URLs and
+extra fields. The router authenticates a read of
+`/chat/responsibilities/commitments/{item_id}` before opening Responsibilities;
+it never treats a suggestion as a reply or submits a new user message. Sign-out
+invalidates an in-flight ownership check. Version 1 reply behavior remains intact.
+
+Responsibilities shows the standing source boundary, current coverage and
+prepared suggestions, with source quotes and explicit Confirm / Not a commitment
+controls. Confirmation records a commitment; it does not schedule future work or
+authorize external actions. The matching backend applies quiet hours, review and
+notification budgets, revocation, newer-evidence checks and generic lock-screen
+text. See the [backend pilot contract](https://github.com/Running-Digitally/radhouse/blob/codex/native-proactive-agent/docs/plans/2026-11-02-native-proactive-assistance.md).
+This source candidate is not a deployed proactive-delivery result. A signed build
+and physical foreground/background/cold-start acceptance remain release gates.
+
+Candidate validation, 3 November: 135 Jest behavior tests and 15 tooling tests
+pass, along with TypeScript, lint and coverage gates. The real native notification
+listener is included in foreground, tap and cold-start payload tests; foreground
+suggestions have their own indication and do not announce a chat reply. iOS and
+Android production JavaScript bundles build using the existing dependencies.
+These are bundle checks, not signed native archives or physical delivery tests.
+A current [SonarQube issue read](research/2026-11-03-proactive-touched-findings.json)
+returned zero open project issues; this candidate still needs its post-merge scan.

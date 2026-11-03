@@ -3,6 +3,7 @@ import { AppState, ScrollView } from 'react-native';
 import {
   act,
   fireEvent,
+  fireEventAsync,
   renderAsync,
   waitFor,
   within,
@@ -412,11 +413,14 @@ test('sending from a notification returns to the current conversation', async ()
   await act(async () => callbacks.open(turn.request_id));
   await waitFor(() => expect(f.ui.queryByText('Connecting…')).toBeNull());
   expect(f.ui.getByText('Back to current conversation')).toBeTruthy();
-  fireEvent.changeText(
+  await fireEventAsync.changeText(
     f.ui.getByLabelText('Message Radhouse'),
     'Next question',
   );
-  fireEvent.press(f.ui.getByText('Send message'));
+  await waitFor(() =>
+    expect(f.ui.getByRole('button', { name: 'Send message' })).toBeEnabled(),
+  );
+  await fireEventAsync.press(f.ui.getByText('Send message'));
   await waitFor(() =>
     expect(f.ui.queryByText('Back to current conversation')).toBeNull(),
   );

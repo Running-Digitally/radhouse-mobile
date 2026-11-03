@@ -24,6 +24,7 @@ type Listener = {
   open: (requestId: string) => void;
   openCommitment?: (itemId: string) => void;
   foreground: () => void;
+  foregroundCommitment?: () => void;
 };
 
 export class NotificationConnection {
@@ -80,7 +81,11 @@ export class NotificationConnection {
       data => {
         this.router.receive(data).catch(() => this.report('error'));
       },
-      () => this.listener?.foreground(),
+      data => {
+        if (data.kind === 'commitment_ready')
+          this.listener?.foregroundCommitment?.();
+        else this.listener?.foreground();
+      },
     );
     await this.router.signIn({
       ownsRequest: async id => {

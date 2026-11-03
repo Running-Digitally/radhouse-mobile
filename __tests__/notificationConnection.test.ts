@@ -1,7 +1,10 @@
 import { NotificationConnection } from '../src/notifications/connection';
 import { SessionClient } from '../src/auth/client';
 import { NativePush, PushSetupError } from '../src/notifications/nativePush';
-import { ReplyNotification } from '../src/notifications/payload';
+import {
+  AgentNotification,
+  ReplyNotification,
+} from '../src/notifications/payload';
 import { SessionError } from '../src/auth/types';
 const id = '58e8f3dd-cd82-48a4-9df9-63c3a15b310f';
 const payload: ReplyNotification = {
@@ -22,8 +25,8 @@ function fixture(raw: string | null = null) {
     })),
     read: jest.fn(async () => ({ turn: { request_id: id } })),
   };
-  let open!: (data: ReplyNotification) => void;
-  let foreground!: (data: ReplyNotification) => void;
+  let open!: (data: AgentNotification) => void;
+  let foreground!: (data: AgentNotification) => void;
   const stop = jest.fn();
   const native = {
     configured: jest.fn(() => true),
@@ -53,7 +56,7 @@ function fixture(raw: string | null = null) {
     listener,
     stop,
     open: () => open(payload),
-    foreground: () => foreground(payload),
+    foreground: (data: AgentNotification = payload) => foreground(data),
   };
 }
 
@@ -204,3 +207,17 @@ test.each(['apple', 'firebase', 'server', 'cleanup'] as const)(
     );
   },
 );
+
+test('a foreground suggestion does not pretend a chat reply arrived', async () => {
+  const f = fixture(pref());
+  const foregroundCommitment = jest.fn();
+  await f.connection.connect('owner', { ...f.listener, foregroundCommitment });
+  f.foreground({
+    version: '2',
+    kind: 'commitment_ready',
+    item_id: id,
+    event_id: id,
+  });
+  expect(foregroundCommitment).toHaveBeenCalledTimes(1);
+  expect(f.listener.foreground).not.toHaveBeenCalled();
+});

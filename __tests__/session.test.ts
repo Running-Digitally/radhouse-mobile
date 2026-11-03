@@ -417,3 +417,62 @@ test('model discovery and per-message thinking use the authenticated server cont
     }),
   );
 });
+
+test('standing responsibility controls require a session and send bounded CSRF-protected decisions', async () => {
+  const f = fixture();
+  const id = '58e8f3dd-cd82-48a4-9df9-63c3a15b310f';
+  await expect(f.client.commitmentControl(true)).rejects.toThrow('expired');
+  await f.login();
+  await f.client.commitmentControl(true);
+  expect(f.io.request).toHaveBeenLastCalledWith(
+    ORIGIN + '/chat/responsibilities/commitments',
+    'POST',
+    access,
+    local,
+    csrf,
+    JSON.stringify({ active: true }),
+  );
+  await f.client.commitmentDecision(id, 'dismissed');
+  expect(f.io.request).toHaveBeenLastCalledWith(
+    ORIGIN + '/chat/responsibilities/commitments/' + id,
+    'POST',
+    access,
+    local,
+    csrf,
+    JSON.stringify({ decision: 'dismissed' }),
+  );
+  await expect(
+    f.client.commitmentDecision('../other', 'confirmed'),
+  ).rejects.toThrow('invalid');
+  await f.client.read('/chat/responsibilities/commitments/' + id);
+  await expect(
+    f.client.read('/chat/responsibilities/commitments/' + id + '?owner=other'),
+  ).rejects.toThrow('invalid');
+});
+
+test('agent notification opt-in requires backend support before registration', async () => {
+  const f = fixture();
+  await f.login();
+  const id = await f.client.newRequestId();
+  const registration = f.client.pushRegistration(id, true);
+  f.io.request.mockResolvedValueOnce(response({ available: true }));
+  await expect(
+    registration.register('synthetic-fcm-token-0001', 'ios'),
+  ).rejects.toThrow('unsupported');
+  f.io.request.mockResolvedValueOnce(
+    response({ available: true, commitments: true }),
+  );
+  await registration.register('synthetic-fcm-token-0001', 'ios');
+  expect(f.io.request).toHaveBeenLastCalledWith(
+    ORIGIN + '/chat/push/devices/' + id,
+    'PUT',
+    access,
+    local,
+    csrf,
+    JSON.stringify({
+      token: 'synthetic-fcm-token-0001',
+      platform: 'ios',
+      commitments: true,
+    }),
+  );
+});

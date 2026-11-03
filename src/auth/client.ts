@@ -80,6 +80,7 @@ function checkHTTPStatus(result: HTTPResult, path: string, method: string) {
 export type FollowupAction = { revision: number } & (
   | { action: 'progress'; progress: string }
   | { action: 'snooze'; days: 1 | 3 | 7 }
+  | { action: 'research'; question: string }
   | { action: 'resume' | 'complete' | 'stop' }
 );
 

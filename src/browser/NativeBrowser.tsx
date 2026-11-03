@@ -57,6 +57,124 @@ function pageName(value: BrowserPresentation | null) {
     return 'Your browser';
   }
 }
+function BrowserHeader({
+  full,
+  state,
+  blocked,
+  back,
+  onAddress,
+  onTools,
+}: Readonly<{
+  full: boolean;
+  state: BrowserPresentation | null;
+  blocked: boolean;
+  back: () => void;
+  onAddress: () => void;
+  onTools: () => void;
+}>) {
+  const live = state?.state === 'live';
+  return (
+    <>
+      {full ? (
+        <View style={local.header}>
+          <Tool label="Chat" onPress={back} />
+          <Pressable
+            style={local.address}
+            accessibilityRole="button"
+            accessibilityLabel="Search or enter address"
+            disabled={!state?.human || blocked}
+            onPress={onAddress}
+          >
+            <Text numberOfLines={1} style={local.pageTitle}>
+              {state?.title || pageName(state)}
+            </Text>
+            <Text numberOfLines={1} style={styles.small}>
+              {pageName(state)}
+            </Text>
+          </Pressable>
+          <Tool label="Tools" onPress={onTools} />
+        </View>
+      ) : (
+        <View style={local.previewHeader}>
+          <View style={local.liveDot} />
+          <Text style={local.previewTitle}>Agent is browsing</Text>
+          <Text style={local.expandLabel}>Expand ↗</Text>
+        </View>
+      )}
+      {full && live && (
+        <View style={local.status}>
+          <View style={[local.liveDot, !state?.human && local.agentDot]} />
+          <Text accessibilityLiveRegion="polite" style={local.statusText}>
+            {browserLabel(state)}
+          </Text>
+          <Text style={styles.small}>
+            {state?.playback === 'live' ? 'Live' : 'Connecting'}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+}
+
+function CanvasStatus({
+  full,
+  state,
+  failure,
+  blocked,
+  send,
+}: Readonly<{
+  full: boolean;
+  state: BrowserPresentation | null;
+  failure: boolean;
+  blocked: boolean;
+  send: (command: BrowserCommand) => void;
+}>) {
+  const live = state?.state === 'live';
+  return (
+    <>
+      {full && (state?.state !== 'live' || failure) && (
+        <View style={local.empty}>
+          {!state && !failure ? <ActivityIndicator color={colors.ink} /> : null}
+          <Text style={local.emptyTitle}>
+            {failure || state?.state === 'unavailable'
+              ? 'Let’s reconnect'
+              : 'A shared place to explore'}
+          </Text>
+          <Text style={local.emptyDetail}>
+            {failure
+              ? 'The connection was interrupted. Your last browser action has not been repeated.'
+              : 'Open a page, take a closer look, then bring it back into your conversation.'}
+          </Text>
+          {state?.state === 'idle' && !failure ? (
+            <Tool
+              label="Open browser"
+              primary
+              disabled={blocked}
+              onPress={() => send({ action: 'open' })}
+            />
+          ) : (
+            <Tool
+              label="Check connection"
+              onPress={() => send({ action: 'refresh' })}
+            />
+          )}
+        </View>
+      )}
+      {full &&
+        live &&
+        ['stalled', 'tap_required', 'unavailable'].includes(state.playback) && (
+          <View style={local.connectionCard}>
+            <Text style={styles.body}>The live view paused.</Text>
+            <Tool
+              label="Reconnect view"
+              onPress={() => send({ action: 'reconnect' })}
+            />
+          </View>
+        )}
+    </>
+  );
+}
+
 export function NativeBrowser({
   origin,
   tab,
@@ -127,46 +245,17 @@ export function NativeBrowser({
       accessibilityElementsHidden={hidden}
       importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
     >
-      {full ? (
-        <View style={local.header}>
-          <Tool label="Chat" onPress={back} />
-          <Pressable
-            style={local.address}
-            accessibilityRole="button"
-            accessibilityLabel="Search or enter address"
-            disabled={!state?.human || blocked}
-            onPress={() => {
-              setDraft(state?.url || '');
-              setAddress(true);
-            }}
-          >
-            <Text numberOfLines={1} style={local.pageTitle}>
-              {state?.title || pageName(state)}
-            </Text>
-            <Text numberOfLines={1} style={styles.small}>
-              {pageName(state)}
-            </Text>
-          </Pressable>
-          <Tool label="Tools" onPress={() => setTools(true)} />
-        </View>
-      ) : (
-        <View style={local.previewHeader}>
-          <View style={local.liveDot} />
-          <Text style={local.previewTitle}>Agent is browsing</Text>
-          <Text style={local.expandLabel}>Expand ↗</Text>
-        </View>
-      )}
-      {full && live && (
-        <View style={local.status}>
-          <View style={[local.liveDot, !state?.human && local.agentDot]} />
-          <Text accessibilityLiveRegion="polite" style={local.statusText}>
-            {browserLabel(state)}
-          </Text>
-          <Text style={styles.small}>
-            {state?.playback === 'live' ? 'Live' : 'Connecting'}
-          </Text>
-        </View>
-      )}
+      <BrowserHeader
+        full={full}
+        state={state}
+        blocked={blocked}
+        back={back}
+        onAddress={() => {
+          setDraft(state?.url || '');
+          setAddress(true);
+        }}
+        onTools={() => setTools(true)}
+      />
       <View style={local.viewport}>
         <BrowserCanvas
           ref={canvas}
@@ -184,59 +273,26 @@ export function NativeBrowser({
             onReturned();
           }}
         />
-        {full && (!state || state.state !== 'live' || failure) && (
-          <View style={local.empty}>
-            {!state && !failure ? (
-              <ActivityIndicator color={colors.ink} />
-            ) : null}
-            <Text style={local.emptyTitle}>
-              {failure || state?.state === 'unavailable'
-                ? 'Let’s reconnect'
-                : 'A shared place to explore'}
-            </Text>
-            <Text style={local.emptyDetail}>
-              {failure
-                ? 'The connection was interrupted. Your last browser action has not been repeated.'
-                : 'Open a page, take a closer look, then bring it back into your conversation.'}
-            </Text>
-            {state?.state === 'idle' && !failure ? (
-              <Tool
-                label="Open browser"
-                primary
-                disabled={blocked}
-                onPress={() => send({ action: 'open' })}
-              />
-            ) : (
-              <Tool
-                label="Check connection"
-                onPress={() => send({ action: 'refresh' })}
-              />
-            )}
-          </View>
-        )}
-        {full &&
-          live &&
-          ['stalled', 'tap_required', 'unavailable'].includes(
-            state.playback,
-          ) && (
-            <View style={local.connectionCard}>
-              <Text style={styles.body}>The live view paused.</Text>
-              <Tool
-                label="Reconnect view"
-                onPress={() => send({ action: 'reconnect' })}
-              />
-            </View>
-          )}
+        <CanvasStatus
+          full={full}
+          state={state}
+          failure={failure}
+          blocked={blocked}
+          send={send}
+        />
       </View>
       {full && zoom && live && (
         <View style={local.footer}>
           <Text style={[styles.small, local.grow]}>
             Zoomed for reading. Pan to look around; fit the page to interact.
           </Text>
-          <Tool label="Fit page" onPress={() => {
-            setZoom(false);
-            send({ action: 'zoom', enabled: false });
-          }} />
+          <Tool
+            label="Fit page"
+            onPress={() => {
+              setZoom(false);
+              send({ action: 'zoom', enabled: false });
+            }}
+          />
         </View>
       )}
       {full && state?.notice ? (

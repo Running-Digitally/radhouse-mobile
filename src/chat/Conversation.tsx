@@ -56,6 +56,13 @@ export function Conversation({
     [query, setQuery] = useState('');
   const [actionNotice, setActionNotice] = useState('');
   const working = turns.find(isWorking);
+  let composerHint = 'Draft kept while you move around the app.';
+  if (working) {
+    composerHint = 'Your next message will wait for this reply.';
+  }
+  if (pending) {
+    composerHint = 'Message kept. Retry safely without sending it twice.';
+  }
   const visible = turns.filter(turn =>
     `${turn.text}\n${turn.output ?? ''}`
       .toLocaleLowerCase()
@@ -293,13 +300,7 @@ export function Conversation({
           placeholder="What’s on your mind?"
         />
         <View style={local.footer}>
-          <Text style={[styles.small, styles.grow]}>
-            {pending
-              ? 'Message kept. Retry safely without sending it twice.'
-              : working
-              ? 'Your next message will wait for this reply.'
-              : 'Draft kept while you move around the app.'}
-          </Text>
+          <Text style={[styles.small, styles.grow]}>{composerHint}</Text>
           <Action
             title={pending ? 'Retry same message' : 'Send message'}
             disabled={

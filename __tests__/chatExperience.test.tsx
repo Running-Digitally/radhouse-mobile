@@ -497,7 +497,7 @@ test('native replies render safe links and fenced code without interpreting HTML
   fireEvent.press(ui.getByText('Source'));
   expect(link).toHaveBeenCalledWith('https://example.com');
   expect(replyBlocks('```\nunclosed code')).toEqual([
-    { code: true, text: 'unclosed code' },
+    { id: 'code:4', code: true, text: 'unclosed code' },
   ]);
 });
 

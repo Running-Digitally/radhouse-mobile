@@ -486,7 +486,7 @@ export function NativeBrowser({
             {state?.title || pageName(state)}
           </Text>
           <Pressable
-            style={[StyleSheet.absoluteFill, { top: 52 }]}
+            style={[StyleSheet.absoluteFill, local.previewOverlay]}
             accessibilityRole="button"
             accessibilityLabel={`Expand live browser: ${
               state?.title || pageName(state)
@@ -604,6 +604,7 @@ const local = StyleSheet.create({
   },
   agentDot: { backgroundColor: '#8A642B' },
   viewport: { flex: 1, overflow: 'hidden' },
+  previewOverlay: { top: 52 },
   previewHeader: {
     height: 52,
     paddingHorizontal: 12,

@@ -92,7 +92,8 @@ APNs/FCM delivery. See [push delivery](docs/push-delivery.md) for remaining work
 The browser screen uses native title/address controls, explicit takeover and
 handback, and a native tools sheet for privacy, navigation and reading zoom.
 Only the authenticated remote canvas is embedded. Chat shows a live, view-only
-mini browser while the agent is actively browsing. Expanding keeps the same
+mini browser while the agent is browsing and keeps a dismissible Browser ready
+card afterward. The mini shows the top of the stream at full card width. Expanding keeps the same
 browser tab and does not take control; returning preserves the chat draft and
 mounted conversation. The preview shrinks while the keyboard is visible.
 

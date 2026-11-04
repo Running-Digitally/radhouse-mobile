@@ -64,6 +64,8 @@ function BrowserHeader({
   back,
   onAddress,
   onTools,
+  expand,
+  dismiss,
 }: Readonly<{
   full: boolean;
   state: BrowserPresentation | null;
@@ -71,6 +73,8 @@ function BrowserHeader({
   back: () => void;
   onAddress: () => void;
   onTools: () => void;
+  expand: () => void;
+  dismiss: () => void;
 }>) {
   const live = state?.state === 'live';
   return (
@@ -97,8 +101,11 @@ function BrowserHeader({
       ) : (
         <View style={local.previewHeader}>
           <View style={local.liveDot} />
-          <Text style={local.previewTitle}>Agent is browsing</Text>
-          <Text style={local.expandLabel}>Expand ↗</Text>
+          <Text style={local.previewTitle}>
+            {state?.active ? 'Agent is browsing' : 'Browser ready'}
+          </Text>
+          <Tool label="Expand" onPress={expand} />
+          <Tool label="Hide preview" onPress={dismiss} />
         </View>
       )}
       {full && live && (
@@ -324,7 +331,10 @@ export function NativeBrowser({
     [draft, setDraft] = useState('');
   const [zoom, setZoom] = useState(false),
     [failure, setFailure] = useState(false);
-  const preview = state?.active === true && state.mode === 'agent' && !failure;
+  const preview =
+    (state?.previewAvailable ?? state?.active) === true &&
+    state?.mode === 'agent' &&
+    !failure;
   const live = state?.state === 'live';
   const blocked = !state || state.busy || state.uncertain || failure;
   React.useEffect(() => {
@@ -378,6 +388,8 @@ export function NativeBrowser({
           setAddress(true);
         }}
         onTools={() => setTools(true)}
+        expand={expand}
+        dismiss={() => send({ action: 'dismissPreview' })}
       />
       <View style={local.viewport}>
         <BrowserCanvas
@@ -430,35 +442,43 @@ export function NativeBrowser({
         />
       ) : null}
       {full && live && (
-        <View style={local.footer}>
-          {state.human ? (
-            <>
-              <Tool
-                label="Keyboard"
-                disabled={blocked || !state.inputReady}
-                onPress={() => send({ action: 'keyboard' })}
-              />
-              <Tool
-                label="Return to agent"
-                primary
-                disabled={blocked || !state.canReturn}
-                onPress={() => send({ action: 'return' })}
-              />
-            </>
-          ) : (
-            <>
-              <Text style={[styles.small, local.grow]}>
-                Watch here, or take control when you need to.
-              </Text>
-              <Tool
-                label="Take control"
-                primary
-                disabled={blocked || !state.canTake}
-                onPress={() => send({ action: 'take' })}
-              />
-            </>
+        <>
+          {state.human && !state.canReturn && (
+            <Text style={local.notice}>
+              Your assistant’s current reply is finishing. You can return
+              control when it ends.
+            </Text>
           )}
-        </View>
+          <View style={local.footer}>
+            {state.human ? (
+              <>
+                <Tool
+                  label="Keyboard"
+                  disabled={blocked || !state.inputReady}
+                  onPress={() => send({ action: 'keyboard' })}
+                />
+                <Tool
+                  label="Return to agent"
+                  primary
+                  disabled={blocked || !state.canReturn}
+                  onPress={() => send({ action: 'return' })}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={[styles.small, local.grow]}>
+                  Watch here, or take control when you need to.
+                </Text>
+                <Tool
+                  label="Take control"
+                  primary
+                  disabled={blocked || !state.canTake}
+                  onPress={() => send({ action: 'take' })}
+                />
+              </>
+            )}
+          </View>
+        </>
       )}
       {!full && (
         <>
@@ -466,7 +486,7 @@ export function NativeBrowser({
             {state?.title || pageName(state)}
           </Text>
           <Pressable
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, local.previewOverlay]}
             accessibilityRole="button"
             accessibilityLabel={`Expand live browser: ${
               state?.title || pageName(state)
@@ -584,8 +604,9 @@ const local = StyleSheet.create({
   },
   agentDot: { backgroundColor: '#8A642B' },
   viewport: { flex: 1, overflow: 'hidden' },
+  previewOverlay: { top: 52 },
   previewHeader: {
-    height: 38,
+    height: 52,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',

@@ -8,9 +8,12 @@ The preview uses synthetic data. A separate **Connect to my Radhouse** flow now
 implements two-layer sign-in, secure session restoration, native conversation
 and Library reads, explicit message submission, and authenticated Browser and
 Terminal viewers. Native sign-in, saved-session restoration and Terminal opening
-have been qualified in the iOS simulator. Browser opening currently encounters a
-shared server conflict also reproduced in the web app. Library downloads/uploads
-remain in development. Physical notification delivery is under qualification.
+have been qualified in the iOS simulator. The earlier shared browser opening
+conflict was repaired; the 4 November web/iOS/Android acceptance covered rendered
+private control, handback, live mini previews and draft preservation. See the
+[shared browser findings and acceptance guide](https://github.com/Running-Digitally/radhouse/blob/main/docs/research/2026-11-04-browser-reliability-lessons.md).
+Library downloads/uploads remain in development. Store availability, physical
+installation and notification delivery for a given build are separate evidence.
 
 The Firebase messaging adapter is connected to authenticated registration and
 notification controls. The matching backend outbox was deployed on 2026-11-02
@@ -112,6 +115,12 @@ navigation restrictions, view-only expansion, privacy, uncertain actions,
 background removal and draft continuity. Chromium/WebKit canvas checks and
 simulator screenshots provide separate UI evidence; live deployment and physical
 phone acceptance remain release gates.
+
+The accepted mini fits the actual video width and clips the lower page. The
+remote Chrome controls remain visible by explicit owner choice for this release.
+Use the shared guide above to diagnose transport, decoder, lifecycle and layout
+failures separately. The screenshots demonstrate simulator behavior; they do not
+establish universal WebView recovery or physical-phone acceptance.
 
 Public research controls also run through the actual authenticated session
 client in integration tests, including explicit enable, saved revision refresh

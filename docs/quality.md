@@ -128,3 +128,12 @@ header/connection rendering and the browser-destination predicate; it preserves
 state, commands and control boundaries. Typecheck, lint, 161 application tests,
 coverage thresholds and 15 tooling tests pass. Server closure and the final gate
 must be confirmed by the next exact-main analysis, not inferred from this edit.
+
+That confirmation is complete: merged main
+`7577fe0b2c92d39bb37252a97c42af491f2bdf53` was processed on 2026-11-03 with a
+passing quality gate, 90.0% new-code coverage and zero duplication. All three
+findings above closed; both all-code and new-code open issue counts are zero.
+No issue disposition, rule, gate or first-party exclusion changed. The reviewed
+source passes 161 application tests, 15 tooling tests, TypeScript and lint.
+Signed owner-channel artifacts are built from this source; publication and
+physical-device acceptance remain separate release checks.

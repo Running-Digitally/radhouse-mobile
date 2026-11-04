@@ -84,6 +84,10 @@ test('native status is a bounded presentation contract, never capability data or
   for (const raw of [
     packet({ ...state, title: 'x'.repeat(513) }),
     packet({ ...state, active: 'true' } as unknown as BrowserPresentation),
+    packet({
+      ...state,
+      previewAvailable: 'true',
+    } as unknown as BrowserPresentation),
     packet(state, 'take'),
     'x'.repeat(8193),
     '{}',
@@ -133,6 +137,16 @@ test('live chat card expands without taking control and private or inactive stat
   );
   ui.rerender(<NativeBrowser {...props} />);
   publish({ ...state, active: false });
+  expect(ui.queryByLabelText('Expand live browser: Example page')).toBeNull();
+  publish({ ...state, active: false, previewAvailable: true });
+  expect(ui.getByText('Browser ready')).toBeTruthy();
+  fireEvent.press(ui.getByLabelText('Expand live browser: Example page'));
+  expect(props.expand).toHaveBeenCalledTimes(2);
+  fireEvent.press(ui.getByLabelText('Hide preview'));
+  expect(mockInject).toHaveBeenLastCalledWith(
+    commandScript({ action: 'dismissPreview' }),
+  );
+  publish({ ...state, active: false, previewAvailable: false });
   expect(ui.queryByLabelText('Expand live browser: Example page')).toBeNull();
   publish({ ...state, mode: 'human', human: true });
   expect(ui.queryByLabelText('Expand live browser: Example page')).toBeNull();
@@ -253,9 +267,15 @@ test('native owner controls keep input, privacy, handback and local presentation
   expect(mockInject).toHaveBeenLastCalledWith(
     commandScript({ action: 'zoom', enabled: true }),
   );
-  expect(ui.getByText('Zoomed for reading. Pan to look around; fit the page to interact.')).toBeTruthy();
+  expect(
+    ui.getByText(
+      'Zoomed for reading. Pan to look around; fit the page to interact.',
+    ),
+  ).toBeTruthy();
   tap('Fit page');
-  expect(mockInject).toHaveBeenLastCalledWith(commandScript({ action: 'zoom', enabled: false }));
+  expect(mockInject).toHaveBeenLastCalledWith(
+    commandScript({ action: 'zoom', enabled: false }),
+  );
   tap('Tools');
   tap('Reconnect view');
   expect(mockInject).toHaveBeenLastCalledWith(

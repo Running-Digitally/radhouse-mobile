@@ -5,6 +5,7 @@ export type BrowserPresentation = {
   authenticated: boolean;
   state: 'live' | 'idle' | 'starting' | 'unavailable';
   active: boolean;
+  previewAvailable?: boolean;
   mode: 'agent' | 'human' | 'paused' | 'recovering' | 'takeover_pending';
   human: boolean;
   observing: boolean;
@@ -37,6 +38,7 @@ export type BrowserCommand =
         | 'refresh'
         | 'reconnect'
         | 'keyboard'
+        | 'dismissPreview'
         | 'hideKeyboard';
     };
 
@@ -139,6 +141,11 @@ export function readPresentation(raw: string): {
     if (typeof v[key] !== 'string' || v[key].length > limit)
       throw new SessionError('invalid');
   }
+  if (
+    v.previewAvailable !== undefined &&
+    typeof v.previewAvailable !== 'boolean'
+  )
+    throw new SessionError('invalid');
   // Presentation data carries no capability or credentials and cannot invoke native actions.
   const {
     authenticated,
@@ -164,6 +171,9 @@ export function readPresentation(raw: string): {
       authenticated,
       state,
       active,
+      ...(v.previewAvailable === undefined
+        ? {}
+        : { previewAvailable: v.previewAvailable }),
       mode,
       human,
       observing,

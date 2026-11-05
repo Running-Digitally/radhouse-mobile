@@ -31,6 +31,7 @@ export function Conversation({
   openModels,
   modelsAvailable,
   selectionValid,
+  browserHandoff,
 }: Readonly<{
   turns: readonly LiveTurn[];
   text: string;
@@ -48,6 +49,7 @@ export function Conversation({
   openModels: () => void;
   modelsAvailable: boolean;
   selectionValid: boolean;
+  browserHandoff?: React.ReactNode;
 }>) {
   const history = useRef<ScrollView>(null),
     following = useRef(true);
@@ -267,6 +269,7 @@ export function Conversation({
         </View>
       )}
       <View testID="conversation-composer" style={local.composer}>
+        {browserHandoff}
         {actionNotice ? (
           <Text accessibilityLiveRegion="polite" style={styles.small}>
             {actionNotice}

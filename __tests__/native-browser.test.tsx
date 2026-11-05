@@ -1,7 +1,11 @@
 import React from 'react';
 import { BackHandler, NativeModules, Platform } from 'react-native';
 import { fireEvent, render, act } from '@testing-library/react-native';
-import { NativeBrowser } from '../src/browser/NativeBrowser';
+import {
+  BrowserHandoff,
+  BrowserHandoffHint,
+  NativeBrowser,
+} from '../src/browser/NativeBrowser';
 import {
   BrowserPresentation,
   canvasURL,
@@ -156,6 +160,15 @@ test('native status is a bounded presentation contract, never capability data or
 });
 
 test('live chat card expands without taking control and private or inactive states hide the preview', () => {
+  function Host(props: React.ComponentProps<typeof NativeBrowser>) {
+    const [handoff, setHandoff] = React.useState<BrowserHandoff | null>(null);
+    return (
+      <>
+        <NativeBrowser {...props} onHandoff={setHandoff} />
+        {handoff && <BrowserHandoffHint mode={handoff} open={props.expand} />}
+      </>
+    );
+  }
   const props = {
     origin,
     tab,
@@ -165,7 +178,7 @@ test('live chat card expands without taking control and private or inactive stat
     onExpired: jest.fn(),
     onReturned: jest.fn(),
   };
-  const ui = render(<NativeBrowser {...props} />);
+  const ui = render(<Host {...props} />);
   const view = () =>
     ui.getByTestId('browser-canvas', { includeHiddenElements: true });
   const publish = (value: BrowserPresentation) =>
@@ -181,7 +194,7 @@ test('live chat card expands without taking control and private or inactive stat
       ([script]) => !script.includes('"action":"take"'),
     ),
   ).toBe(true);
-  ui.rerender(<NativeBrowser {...props} full />);
+  ui.rerender(<Host {...props} full />);
   expect(view().props.source.uri).toBe(uri);
   expect(mockInject).toHaveBeenLastCalledWith(
     commandScript({ action: 'present', mode: 'full' }),
@@ -190,7 +203,7 @@ test('live chat card expands without taking control and private or inactive stat
   expect(mockInject).toHaveBeenLastCalledWith(
     commandScript({ action: 'take' }),
   );
-  ui.rerender(<NativeBrowser {...props} />);
+  ui.rerender(<Host {...props} />);
   publish({ ...state, active: false });
   expect(ui.queryByLabelText('Expand live browser: Example page')).toBeNull();
   publish({ ...state, active: false, previewAvailable: true });
@@ -205,6 +218,36 @@ test('live chat card expands without taking control and private or inactive stat
   expect(ui.queryByLabelText('Expand live browser: Example page')).toBeNull();
   publish({ ...state, mode: 'human', human: true });
   expect(ui.queryByLabelText('Expand live browser: Example page')).toBeNull();
+  publish({ ...state, mode: 'paused', active: false, previewAvailable: false });
+  expect(
+    ui.getByText('Take control, then choose Return to agent.'),
+  ).toBeTruthy();
+  expect(ui.queryByText('Example page')).toBeNull();
+  mockInject.mockClear();
+  fireEvent.press(ui.getByLabelText('Open browser to return'));
+  expect(props.expand).toHaveBeenCalledTimes(3);
+  expect(mockInject).not.toHaveBeenCalled();
+  ui.rerender(<Host {...props} full compact />);
+  expect(ui.queryByLabelText('Return to agent')).toBeNull();
+  fireEvent.press(ui.getByLabelText('Take control'));
+  expect(mockInject).toHaveBeenLastCalledWith(
+    commandScript({ action: 'take' }),
+  );
+  const human = {
+    ...state,
+    mode: 'human',
+    human: true,
+    canReturn: true,
+  } as const;
+  publish(human);
+  fireEvent.press(ui.getByLabelText('Return to agent'));
+  expect(mockInject).toHaveBeenLastCalledWith(
+    commandScript({ action: 'return' }),
+  );
+  publish({ ...human, busy: true, returning: true });
+  expect(
+    ui.getByRole('button', { name: 'Returning…', disabled: true }),
+  ).toBeTruthy();
 });
 
 test('foreign messages cannot expire a session; genuine expiry and return preserve their separate meanings', () => {
@@ -298,7 +341,7 @@ test('native owner controls keep input, privacy, handback and local presentation
   );
   expect(view().props.keyboardDisplayRequiresUserAction).toBe(false);
   tap('Tools');
-  tap('Let agent observe');
+  tap('Let agent read this page');
   expect(mockInject).toHaveBeenLastCalledWith(
     commandScript({ action: 'visibility', mode: 'observe' }),
   );

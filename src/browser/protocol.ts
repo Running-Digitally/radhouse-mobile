@@ -14,6 +14,7 @@ export type BrowserPresentation = {
   title: string;
   url: string;
   busy: boolean;
+  returning?: boolean;
   uncertain: boolean;
   playback: 'connecting' | 'live' | 'stalled' | 'tap_required' | 'unavailable';
   inputReady: boolean;
@@ -146,6 +147,8 @@ export function readPresentation(raw: string): {
     typeof v.previewAvailable !== 'boolean'
   )
     throw new SessionError('invalid');
+  if (v.returning !== undefined && typeof v.returning !== 'boolean')
+    throw new SessionError('invalid');
   // Presentation data carries no capability or credentials and cannot invoke native actions.
   const {
     authenticated,
@@ -182,6 +185,7 @@ export function readPresentation(raw: string): {
       title,
       url,
       busy,
+      ...(v.returning === undefined ? {} : { returning: v.returning }),
       uncertain,
       playback,
       inputReady,
@@ -202,11 +206,11 @@ export function browserLabel(state: BrowserPresentation | null): string {
   if (state.uncertain) return 'Check the current page';
   if (state.human)
     return state.observing
-      ? 'You control · Agent can observe'
+      ? 'You control · Agent can read'
       : 'Private · Only you';
   if (state.mode === 'human') return 'Open on another device';
   if (state.mode === 'takeover_pending') return 'Handing control to you';
   if (state.mode === 'recovering') return 'Browser action needs review';
   if (state.mode === 'paused') return 'Browser paused';
-  return state.active ? 'Agent is browsing' : 'Agent has control';
+  return state.active ? 'Agent is browsing' : 'Agent can browse';
 }

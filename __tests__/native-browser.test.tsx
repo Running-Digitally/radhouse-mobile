@@ -1,5 +1,5 @@
 import React from 'react';
-import { BackHandler, Platform } from 'react-native';
+import { BackHandler, NativeModules, Platform } from 'react-native';
 import { fireEvent, render, act } from '@testing-library/react-native';
 import { NativeBrowser } from '../src/browser/NativeBrowser';
 import {
@@ -12,7 +12,8 @@ import {
 } from '../src/browser/protocol';
 
 const mockInject = jest.fn(),
-  mockReload = jest.fn();
+  mockReload = jest.fn(),
+  mockFocus = jest.fn();
 jest.mock('react-native-webview', () => {
   const ReactModule = require('react');
   return {
@@ -23,6 +24,7 @@ jest.mock('react-native-webview', () => {
       ReactModule.useImperativeHandle(ref, () => ({
         injectJavaScript: mockInject,
         reload: mockReload,
+        requestFocus: mockFocus,
       }));
       return ReactModule.createElement('WebView', props);
     }),
@@ -52,6 +54,59 @@ const state: BrowserPresentation = {
 const packet = (value = state, event = 'state') =>
   JSON.stringify({ schema: 'radhouse.mobile-browser.v1', event, ...value });
 beforeEach(() => jest.clearAllMocks());
+
+test('Android keyboard targets the canvas once and remains unavailable without private input control', () => {
+  const platform = Platform.OS;
+  Platform.OS = 'android';
+  const show = jest.fn();
+  NativeModules.RadhouseBrowserKeyboard = { show };
+  try {
+    const ui = render(
+      <NativeBrowser
+        origin={origin}
+        tab={tab}
+        full
+        expand={jest.fn()}
+        back={jest.fn()}
+        onExpired={jest.fn()}
+        onReturned={jest.fn()}
+      />,
+    );
+    const view = ui.getByTestId('browser-canvas');
+    const publish = (value: BrowserPresentation) =>
+      fireEvent(view, 'message', {
+        nativeEvent: { url: uri, data: packet(value), target: 42 },
+      });
+    publish({
+      ...state,
+      mode: 'human',
+      human: true,
+      inputReady: true,
+      canReturn: true,
+    });
+    mockInject.mockClear();
+    fireEvent.press(ui.getByLabelText('Keyboard'));
+    expect(show).toHaveBeenCalledWith(42);
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(mockInject).not.toHaveBeenCalled();
+    expect(mockFocus).not.toHaveBeenCalled();
+    publish({
+      ...state,
+      mode: 'human',
+      human: true,
+      inputReady: false,
+      canReturn: true,
+    });
+    fireEvent.press(ui.getByLabelText('Keyboard'));
+    expect(show).toHaveBeenCalledTimes(1);
+    publish(state);
+    expect(ui.queryByLabelText('Keyboard')).toBeNull();
+    expect(show).toHaveBeenCalledTimes(1);
+  } finally {
+    delete NativeModules.RadhouseBrowserKeyboard;
+    Platform.OS = platform;
+  }
+});
 
 test('canvas navigation admits only the exact root and owned stream, including Android frame metadata', () => {
   expect(canvasNavigationAllowed(uri, uri, true)).toBe(true);
@@ -234,9 +289,14 @@ test('native owner controls keep input, privacy, handback and local presentation
   });
   expect(ui.queryByLabelText('Browser address or search')).toBeNull();
   tap('Keyboard');
+  expect(mockFocus).toHaveBeenCalledTimes(1);
   expect(mockInject).toHaveBeenLastCalledWith(
     commandScript({ action: 'keyboard' }),
   );
+  expect(mockFocus.mock.invocationCallOrder[0]).toBeLessThan(
+    mockInject.mock.invocationCallOrder.at(-1)!,
+  );
+  expect(view().props.keyboardDisplayRequiresUserAction).toBe(false);
   tap('Tools');
   tap('Let agent observe');
   expect(mockInject).toHaveBeenLastCalledWith(

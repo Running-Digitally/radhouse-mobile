@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { NativeModules, Platform, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import {
   BrowserCommand,
@@ -34,6 +34,7 @@ export const BrowserCanvas = forwardRef<
   ref,
 ) {
   const web = useRef<WebView<object>>(null);
+  const androidViewTag = useRef<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const loadedDocument = useRef<string | null>(null);
   const uri = canvasURL(origin, tab);
@@ -41,6 +42,16 @@ export const BrowserCanvas = forwardRef<
     if (value.action === 'refresh' && !loaded) {
       web.current?.reload();
       return;
+    }
+    // A native toolbar tap is not a tap inside the WebView. Transfer native
+    // focus before the guarded viewer focuses its existing input/IME field.
+    if (value.action === 'keyboard' && full && loaded) {
+      if (Platform.OS === 'android') {
+        const tag = androidViewTag.current;
+        if (tag !== null) NativeModules.RadhouseBrowserKeyboard.show(tag);
+        return;
+      }
+      web.current?.requestFocus();
     }
     web.current?.injectJavaScript(commandScript(value));
   }
@@ -79,6 +90,12 @@ export const BrowserCanvas = forwardRef<
             return;
           try {
             const result = readPresentation(event.nativeEvent.data);
+            if (
+              'target' in event.nativeEvent &&
+              typeof event.nativeEvent.target === 'number'
+            ) {
+              androidViewTag.current = event.nativeEvent.target;
+            }
             setLoaded(result.value.authenticated);
             if (result.event === 'expired') onExpired();
             else {
@@ -90,6 +107,7 @@ export const BrowserCanvas = forwardRef<
           }
         }}
         onLoadStart={event => {
+          androidViewTag.current = null;
           loadedDocument.current = event.nativeEvent.url;
           setLoaded(false);
         }}
@@ -106,6 +124,7 @@ export const BrowserCanvas = forwardRef<
         mixedContentMode="never"
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
+        keyboardDisplayRequiresUserAction={false}
         allowFileAccess={false}
         javaScriptCanOpenWindowsAutomatically={false}
         setSupportMultipleWindows

@@ -138,7 +138,8 @@ export type BrowserHandoff = 'paused' | 'private' | 'observe' | 'elsewhere';
 export function BrowserHandoffHint({
   mode,
   open,
-}: Readonly<{ mode: BrowserHandoff; open: () => void }>) {
+}: Readonly<{ mode: BrowserHandoff | null; open: () => void }>) {
+  if (!mode) return null;
   const elsewhere = mode === 'elsewhere';
   const title: Record<BrowserHandoff, string> = {
     paused: 'Browser paused',
@@ -165,8 +166,18 @@ export function BrowserHandoffHint({
   );
 }
 
-function handoffMode(state: BrowserPresentation | null): BrowserHandoff | null {
-  if (!state?.authenticated || state.state !== 'live' || state.uncertain)
+function handoffMode(
+  state: BrowserPresentation | null,
+  full: boolean,
+  failure: boolean,
+): BrowserHandoff | null {
+  if (
+    full ||
+    failure ||
+    !state?.authenticated ||
+    state.state !== 'live' ||
+    state.uncertain
+  )
     return null;
   if (state.mode === 'paused') return 'paused';
   if (state.mode !== 'human') return null;
@@ -394,7 +405,7 @@ export function NativeBrowser({
     !failure;
   const live = state?.state === 'live';
   const blocked = !state || state.busy || state.uncertain || failure;
-  const handoff = full || failure ? null : handoffMode(state);
+  const handoff = handoffMode(state, full, failure);
   React.useEffect(() => onHandoff?.(handoff), [handoff, onHandoff]);
   React.useEffect(() => () => onHandoff?.(null), [onHandoff]);
   React.useEffect(() => {
@@ -512,13 +523,11 @@ export function NativeBrowser({
           )}
           <View style={local.footer}>
             {state.human ? (
-              <>
-                <Tool
-                  label="Keyboard"
-                  disabled={blocked || !state.inputReady}
-                  onPress={() => send({ action: 'keyboard' })}
-                />
-              </>
+              <Tool
+                label="Keyboard"
+                disabled={blocked || !state.inputReady}
+                onPress={() => send({ action: 'keyboard' })}
+              />
             ) : (
               <>
                 <Text style={[styles.small, local.grow]}>

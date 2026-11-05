@@ -858,15 +858,13 @@ export function Connected({
               modelsAvailable={Boolean(info?.features.inference)}
               selectionValid={selectionAvailable(catalog, selection)}
               browserHandoff={
-                destination === 'Chat' && browserHandoff ? (
-                  <BrowserHandoffHint
-                    mode={browserHandoff}
-                    open={() => {
-                      Keyboard.dismiss();
-                      setDestination('Browser');
-                    }}
-                  />
-                ) : null
+                <BrowserHandoffHint
+                  mode={browserHandoff}
+                  open={() => {
+                    Keyboard.dismiss();
+                    setDestination('Browser');
+                  }}
+                />
               }
             />
             <ModelPicker

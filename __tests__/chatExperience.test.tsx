@@ -95,6 +95,8 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+// The first connected render also loads the instrumented native fixture on a
+// cold coverage run. Its budget is separate from the assertion waits.
 test('connected controls show supported thinking, selected radio state, and freeze settings across retry', async () => {
   const { ui, client } = await fixture();
   fireEvent.press(ui.getByLabelText('Choose model and thinking'));
@@ -125,7 +127,7 @@ test('connected controls show supported thinking, selected radio state, and free
   ]);
   expect(client.send.mock.calls[1]).toEqual(client.send.mock.calls[0]);
   expect(client.newRequestId).toHaveBeenCalledTimes(2); // Browser tab and one message; retry keeps its ID.
-});
+}, 12000);
 
 test('unavailable selected model cannot silently fall back; Default recovers', async () => {
   const { ui, client } = await fixture();
@@ -138,9 +140,16 @@ test('unavailable selected model cannot silently fall back; Default recovers', a
       ? { ...catalog, models: [] }
       : originalRead(path),
   );
-  fireEvent.press(ui.getByText('Refresh models'));
+  const refresh = await ui.findByRole('button', {
+    name: 'Refresh models',
+    disabled: false,
+  });
+  await act(async () => fireEvent.press(refresh));
+  expect(client.read).toHaveBeenCalledWith('/chat/inference?refresh=true');
   await waitFor(() =>
-    expect(ui.queryByText(/OpenAI · GPT-6.1 Terra/)).toBeNull(),
+    expect(
+      ui.queryByRole('radio', { name: /OpenAI · GPT-6.1 Terra/ }),
+    ).toBeNull(),
   );
   fireEvent.press(ui.getByText('Done'));
   fireEvent.changeText(ui.getByLabelText('Message Radhouse'), 'Keep my draft');

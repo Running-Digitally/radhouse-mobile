@@ -69,3 +69,41 @@ ownership, Private/Observe grants, or foreground-only mounting. Inspection and
 diagnostic scripts are absent from the shipping viewer. The library maps this
 setting to WKWebView's media playback policy; see its
 [API reference](https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md#mediaplaybackrequiresuseraction).
+
+## Browser keyboard acceptance
+
+A native toolbar tap is outside the streamed viewer's WebView. A successful
+JavaScript `focus()` or command-dispatch test does not prove that the phone's
+software keyboard opened. The keyboard candidate transfers iOS native focus and
+allows programmatic keyboard display on this canvas. Android resolves the exact
+WebView from its admitted native event, invokes the existing guarded keyboard
+command, then requests the local input method only after the viewer's existing
+input-assist field is focused. It accepts no text, URLs or scripts from callers.
+The private-control lease, ready/full presentation checks and stream input path
+remain authoritative. Preview and foreign viewers cannot acquire input through
+this native helper.
+
+Before accepting a keyboard change on either platform:
+
+1. Enable the simulator's software keyboard and prove a normal native text field
+   can display it. Hardware-keyboard injection alone is insufficient evidence.
+2. Open Browser and take private control. Tap **Keyboard before touching the
+   streamed page**. Capture the actual visible keyboard.
+3. Tap the streamed address field and use software keys to enter a synthetic
+   public address. Submit it and verify the destination, not merely typed text.
+4. Dismiss and reopen the keyboard three times. Test after a fresh viewer mount,
+   and after returning from another native screen.
+5. Return to the agent with the keyboard open. Verify it closes, the mini preview
+   resumes, and an unsent synthetic chat draft remains exactly unchanged. Check
+   that private content remains absent from other clients' previews.
+
+Record device/OS, source revision, screenshots and release status separately.
+Manually toggling the simulator keyboard or touching the WebView before the
+toolbar test must not be counted as a first-tap pass. The keyboard candidate
+passed these focused simulator checks on both platforms on 5 November 2026,
+including actual software-key address entry, repeated opening, private-preview
+concealment and draft preservation. On Android the owner dismisses the keyboard
+before tapping the bottom handback control; leaving Browser for Chat also clears
+input. Physical owner-device acceptance remains separate from simulator proof.
+
+Reference: [Android input-method visibility](https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility).

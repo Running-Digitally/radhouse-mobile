@@ -17,7 +17,11 @@ import {
 import { ORIGIN, object } from '../auth/transfer';
 import { TabBar } from '../components/TabBar';
 import { LiveViewer } from '../components/LiveViewer';
-import { NativeBrowser } from '../browser/NativeBrowser';
+import {
+  BrowserHandoff,
+  BrowserHandoffHint,
+  NativeBrowser,
+} from '../browser/NativeBrowser';
 import { Action } from '../components/Action';
 import { Commitments } from '../components/Commitments';
 import { styles } from '../theme';
@@ -174,6 +178,9 @@ export function Connected({
   const activeRef = useRef(active);
   const signingOut = useRef(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [browserHandoff, setBrowserHandoff] = useState<BrowserHandoff | null>(
+    null,
+  );
   useEffect(() => {
     let current = true;
     setBrowserTab(null);
@@ -779,6 +786,7 @@ export function Connected({
               setDestination('Chat');
               run(refresh);
             }}
+            onHandoff={setBrowserHandoff}
           />
         )}
       {step === 'workspace' && suggestionReady && (
@@ -849,6 +857,17 @@ export function Connected({
               }}
               modelsAvailable={Boolean(info?.features.inference)}
               selectionValid={selectionAvailable(catalog, selection)}
+              browserHandoff={
+                destination === 'Chat' && browserHandoff ? (
+                  <BrowserHandoffHint
+                    mode={browserHandoff}
+                    open={() => {
+                      Keyboard.dismiss();
+                      setDestination('Browser');
+                    }}
+                  />
+                ) : null
+              }
             />
             <ModelPicker
               visible={modelsOpen}

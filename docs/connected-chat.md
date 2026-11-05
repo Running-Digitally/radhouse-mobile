@@ -107,3 +107,12 @@ before tapping the bottom handback control; leaving Browser for Chat also clears
 input. Physical owner-device acceptance remains separate from simulator proof.
 
 Reference: [Android input-method visibility](https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility).
+
+### Browser handoff
+
+When the browser is paused or held privately, the chat composer offers
+**Open browser to return**. Opening it only changes the screen. In Browser,
+take control if prompted, then use **Return to agent** above the canvas.
+Another device's control instead shows **Review browser**. Private page
+details stay out of the composer prompt. The live mini preview returns after
+the server acknowledges the handoff and the viewer presents a frame.

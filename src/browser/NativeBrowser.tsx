@@ -64,6 +64,7 @@ function BrowserHeader({
   back,
   onAddress,
   onTools,
+  onReturn,
   expand,
   dismiss,
 }: Readonly<{
@@ -73,6 +74,7 @@ function BrowserHeader({
   back: () => void;
   onAddress: () => void;
   onTools: () => void;
+  onReturn: () => void;
   expand: () => void;
   dismiss: () => void;
 }>) {
@@ -115,12 +117,61 @@ function BrowserHeader({
             {browserLabel(state)}
           </Text>
           <Text style={styles.small}>
-            {state?.playback === 'live' ? 'Live' : 'Connecting'}
+            {state?.playback === 'live' ? 'Live view' : 'View connecting'}
           </Text>
+          {state?.human && (
+            <Tool
+              label={state.returning ? 'Returning…' : 'Return to agent'}
+              primary
+              disabled={blocked || !state.canReturn}
+              onPress={onReturn}
+            />
+          )}
         </View>
       )}
     </>
   );
+}
+
+export type BrowserHandoff = 'paused' | 'private' | 'observe' | 'elsewhere';
+
+export function BrowserHandoffHint({
+  mode,
+  open,
+}: Readonly<{ mode: BrowserHandoff; open: () => void }>) {
+  const elsewhere = mode === 'elsewhere';
+  const title: Record<BrowserHandoff, string> = {
+    paused: 'Browser paused',
+    private: 'Private · Only you',
+    observe: 'You control · Agent can read',
+    elsewhere: 'Open on another device',
+  };
+  let detail = 'Choose Return to agent to let Radhouse browse.';
+  if (elsewhere) detail = 'Review the browser before moving control here.';
+  else if (mode === 'paused')
+    detail = 'Take control, then choose Return to agent.';
+  return (
+    <View style={local.handoff}>
+      <Text accessibilityLiveRegion="polite" style={local.statusText}>
+        {title[mode]}
+      </Text>
+      <Text style={styles.small}>{detail}</Text>
+      <Tool
+        label={elsewhere ? 'Review browser' : 'Open browser to return'}
+        primary
+        onPress={open}
+      />
+    </View>
+  );
+}
+
+function handoffMode(state: BrowserPresentation | null): BrowserHandoff | null {
+  if (!state?.authenticated || state.state !== 'live' || state.uncertain)
+    return null;
+  if (state.mode === 'paused') return 'paused';
+  if (state.mode !== 'human') return null;
+  if (!state.human) return 'elsewhere';
+  return state.observing ? 'observe' : 'private';
 }
 
 function CanvasStatus({
@@ -229,7 +280,11 @@ function BrowserTools({
                     : 'The agent cannot see this page while you are in Private mode.'}
                 </Text>
                 <Tool
-                  label={state.observing ? 'Make private' : 'Let agent observe'}
+                  label={
+                    state.observing
+                      ? 'Make private'
+                      : 'Let agent read this page'
+                  }
                   disabled={blocked}
                   onPress={() =>
                     send({
@@ -314,6 +369,7 @@ export function NativeBrowser({
   back,
   onExpired,
   onReturned,
+  onHandoff,
 }: Readonly<{
   origin: string;
   tab: string;
@@ -323,6 +379,7 @@ export function NativeBrowser({
   back: () => void;
   onExpired: () => void;
   onReturned: () => void;
+  onHandoff?: (mode: BrowserHandoff | null) => void;
 }>) {
   const canvas = useRef<CanvasHandle>(null);
   const [state, setState] = useState<BrowserPresentation | null>(null);
@@ -337,6 +394,9 @@ export function NativeBrowser({
     !failure;
   const live = state?.state === 'live';
   const blocked = !state || state.busy || state.uncertain || failure;
+  const handoff = full || failure ? null : handoffMode(state);
+  React.useEffect(() => onHandoff?.(handoff), [handoff, onHandoff]);
+  React.useEffect(() => () => onHandoff?.(null), [onHandoff]);
   React.useEffect(() => {
     if (!full) {
       setTools(false);
@@ -388,6 +448,7 @@ export function NativeBrowser({
           setAddress(true);
         }}
         onTools={() => setTools(true)}
+        onReturn={() => send({ action: 'return' })}
         expand={expand}
         dismiss={() => send({ action: 'dismissPreview' })}
       />
@@ -457,17 +518,13 @@ export function NativeBrowser({
                   disabled={blocked || !state.inputReady}
                   onPress={() => send({ action: 'keyboard' })}
                 />
-                <Tool
-                  label="Return to agent"
-                  primary
-                  disabled={blocked || !state.canReturn}
-                  onPress={() => send({ action: 'return' })}
-                />
               </>
             ) : (
               <>
                 <Text style={[styles.small, local.grow]}>
-                  Watch here, or take control when you need to.
+                  {state.mode === 'paused'
+                    ? 'Take control, then choose Return to agent.'
+                    : 'Watch here, or take control when you need to.'}
                 </Text>
                 <Tool
                   label="Take control"
@@ -561,6 +618,13 @@ const local = StyleSheet.create({
     backgroundColor: colors.card,
   },
   compact: { height: 116 },
+  handoff: {
+    gap: 4,
+    padding: 8,
+    alignItems: 'flex-start',
+    borderRadius: 14,
+    backgroundColor: colors.soft,
+  },
   // WebViews defer loading at zero size. Keep a laid-out, non-interactive,
   // invisible status surface so a cold chat can discover active browsing.
   hidden: {
@@ -593,9 +657,10 @@ const local = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  statusText: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.ink },
+  statusText: { fontSize: 12, fontWeight: '600', color: colors.ink },
   liveDot: {
     width: 7,
     height: 7,
